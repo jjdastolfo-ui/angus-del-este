@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ANGUS DEL ESTE — Ganadería de Precisión</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0f0d;
+  --bg2: #111916;
+  --bg3: #1a2420;
+  --surface: #1e2b26;
+  --surface2: #253530;
+  --border: #2d3f38;
+  --border2: #3a5249;
+  --text: #e8efe9;
+  --text2: #9ab3a4;
+  --text3: #6b8a78;
+  --accent: #4ade80;
+  --accent2: #22c55e;
+  --accent-dim: rgba(74,222,128,0.12);
+  --red: #ef4444;
+  --amber: #f59e0b;
+  --blue: #3b82f6;
+  --radius: 10px;
+  --chat-max: 720px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { height:100%; overflow:hidden; }
+body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); }
+
+.app { display:flex; height:100vh; }
+
+/* ── SIDEBAR ── */
+.sidebar {
+  width:240px; background:var(--bg2); border-right:1px solid var(--border);
+  display:flex; flex-direction:column; flex-shrink:0; transition:transform 0.3s;
+}
+.sidebar-header { padding:20px 16px; border-bottom:1px solid var(--border); }
+.logo { display:flex; align-items:center; gap:10px; }
+.logo-icon {
+  width:36px; height:36px; background:var(--accent-dim); border:1px solid var(--border2);
+  border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:18px;
+}
+.logo h1 { font-size:15px; font-weight:700; letter-spacing:1px; color:var(--accent); }
+.logo-sub { font-size:10px; color:var(--text3); margin-left:46px; margin-top:-2px; letter-spacing:0.5px; }
+
+.sidebar-nav { flex:1; overflow-y:auto; padding:10px 8px; }
+.nav-section {
+  font-size:10px; font-weight:600; color:var(--text3); letter-spacing:1.2px;
+  text-transform:uppercase; padding:12px 12px 6px;
+}
+.nav-item {
+  display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:7px;
+  cursor:pointer; font-size:13px; color:var(--text2); transition:all 0.15s; user-select:none;
+}
+.nav-item:hover { background:var(--surface); color:var(--text); }
+.nav-item.active { background:var(--accent-dim); color:var(--accent); font-weight:500; }
+.nav-item .icon { width:18px; text-align:center; font-size:14px; }
+.nav-item .badge {
+  margin-left:auto; background:var(--surface2); color:var(--text3); font-size:11px;
+  padding:1px 7px; border-radius:8px; font-family:'JetBrains Mono',monospace;
+}
+
+.sidebar-footer {
+  padding:12px 16px; border-top:1px solid var(--border); font-size:11px; color:var(--text3);
+}
+
+/* ── MAIN ── */
+.main { flex:1; display:flex; flex-direction:column; min-width:0; }
+
+.topbar {
+  height:50px; background:var(--bg2); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; padding:0 16px; gap:12px; flex-shrink:0;
+}
+.menu-toggle { display:none; background:none; border:none; color:var(--text2); font-size:20px; cursor:pointer; }
+.topbar-title { font-size:14px; font-weight:600; }
+.topbar-back {
+  background:none; border:1px solid var(--border); color:var(--text2); padding:4px 10px;
+  border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit; display:none;
+}
+.topbar-back:hover { background:var(--surface); color:var(--text); }
+
+.content { flex:1; overflow:hidden; position:relative; }
+
+/* ── VIEWS ── */
+.view { position:absolute; inset:0; overflow-y:auto; padding:20px; display:none; }
+.view.active { display:block; }
+
+/* ── DASHBOARD CARDS ── */
+.dash-header {
+  display:flex; align-items:baseline; gap:12px; margin-bottom:20px;
+}
+.dash-header h2 { font-size:20px; font-weight:700; }
+.dash-header .total {
+  font-size:28px; font-weight:700; color:var(--accent);
+  font-family:'JetBrains Mono',monospace;
+}
+.dash-header .label { font-size:13px; color:var(--text3); }
+
+.cat-grid {
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:12px;
+  margin-bottom:28px;
+}
+.cat-card {
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  padding:16px; cursor:pointer; transition:all 0.2s; position:relative; overflow:hidden;
+}
+.cat-card:hover { border-color:var(--accent); transform:translateY(-2px); box-shadow:0 4px 20px rgba(74,222,128,0.08); }
+.cat-card .cat-icon { font-size:28px; margin-bottom:8px; }
+.cat-card .cat-name { font-size:13px; font-weight:600; color:var(--text); margin-bottom:2px; }
+.cat-card .cat-count {
+  font-size:32px; font-weight:700; color:var(--accent);
+  font-family:'JetBrains Mono',monospace; line-height:1;
+}
+.cat-card .cat-sub { font-size:11px; color:var(--text3); margin-top:4px; }
+.cat-card .cat-bar {
+  position:absolute; bottom:0; left:0; height:3px; background:var(--accent); border-radius:0 0 var(--radius) var(--radius);
+  transition:width 0.5s;
+}
+
+.section-title {
+  font-size:12px; font-weight:600; color:var(--text3); letter-spacing:1px;
+  text-transform:uppercase; margin-bottom:10px; padding-bottom:6px; border-bottom:1px solid var(--border);
+}
+
+/* ── ANIMAL LIST ── */
+.list-header {
+  display:flex; align-items:center; gap:12px; margin-bottom:16px; flex-wrap:wrap;
+}
+.list-header h2 { font-size:18px; font-weight:700; }
+.list-header .count { font-size:13px; color:var(--text3); }
+.list-filters {
+  display:flex; gap:6px; margin-left:auto;
+}
+.filter-btn {
+  background:var(--surface); border:1px solid var(--border); color:var(--text2);
+  padding:4px 10px; border-radius:14px; font-size:11px; cursor:pointer; font-family:inherit;
+}
+.filter-btn:hover, .filter-btn.active { background:var(--accent-dim); color:var(--accent); border-color:var(--border2); }
+
+.animal-table { width:100%; border-collapse:collapse; font-size:12px; }
+.animal-table th {
+  text-align:left; padding:8px 8px; font-size:10px; font-weight:600; color:var(--text3);
+  text-transform:uppercase; letter-spacing:0.5px; border-bottom:1px solid var(--border);
+  position:sticky; top:0; background:var(--bg); z-index:2;
+}
+.animal-table td {
+  padding:7px 8px; border-bottom:1px solid var(--border); color:var(--text2);
+  font-family:'JetBrains Mono',monospace; font-size:11px;
+}
+.animal-table tr:hover td { background:var(--surface); }
+.animal-table tr { cursor:pointer; }
+.pelo-dot {
+  display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:4px; vertical-align:middle;
+  border:1px solid var(--border2);
+}
+.pelo-negro { background:#1a1a1a; }
+.pelo-colorado { background:#8B4513; }
+.tag {
+  display:inline-block; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:500;
+}
+.tag-pp { background:rgba(59,130,246,0.15); color:#60a5fa; }
+.tag-sa { background:rgba(245,158,11,0.15); color:#fbbf24; }
+.tag-gral { background:rgba(156,163,175,0.15); color:#9ca3af; }
+.tag-plantel { background:rgba(74,222,128,0.15); color:#4ade80; }
+.tag-venta { background:rgba(239,68,68,0.15); color:#f87171; }
+
+/* ── ANIMAL DETAIL MODAL ── */
+.detail-overlay {
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:100;
+  justify-content:center; align-items:flex-start; padding:40px 20px; overflow-y:auto;
+}
+.detail-overlay.show { display:flex; }
+.detail-card {
+  background:var(--bg2); border:1px solid var(--border); border-radius:12px;
+  width:100%; max-width:700px; padding:24px; position:relative;
+}
+.detail-close {
+  position:absolute; top:12px; right:16px; background:none; border:none;
+  color:var(--text3); font-size:20px; cursor:pointer;
+}
+.detail-close:hover { color:var(--text); }
+.detail-header { margin-bottom:16px; }
+.detail-header h2 { font-size:18px; font-weight:700; color:var(--accent); }
+.detail-header .sub { font-size:13px; color:var(--text3); }
+.detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
+.detail-field label { font-size:10px; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px; }
+.detail-field .val { font-size:14px; font-weight:500; font-family:'JetBrains Mono',monospace; }
+.detail-section { margin-top:16px; }
+.detail-section h3 { font-size:12px; color:var(--text3); text-transform:uppercase; letter-spacing:0.8px; margin-bottom:8px; padding-bottom:4px; border-bottom:1px solid var(--border); }
+.detail-table { width:100%; border-collapse:collapse; font-size:11px; }
+.detail-table th { text-align:left; padding:5px 6px; font-size:10px; color:var(--text3); border-bottom:1px solid var(--border); }
+.detail-table td { padding:5px 6px; border-bottom:1px solid var(--border); color:var(--text2); font-family:'JetBrains Mono',monospace; }
+
+/* ── CHAT ── */
+.chat-container { display:flex; flex-direction:column; height:100%; }
+.chat-messages { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:10px; }
+.chat-messages::-webkit-scrollbar { width:5px; }
+.chat-messages::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+.msg { max-width:var(--chat-max); padding:10px 14px; border-radius:var(--radius); font-size:13px; line-height:1.5; white-space:pre-wrap; word-break:break-word; animation:msgIn 0.25s ease-out; }
+@keyframes msgIn { from { opacity:0; transform:translateY(6px); } }
+.msg.user { align-self:flex-end; background:var(--accent-dim); border:1px solid var(--border2); }
+.msg.bot { align-self:flex-start; background:var(--surface); border:1px solid var(--border); font-family:'JetBrains Mono','DM Sans',monospace; font-size:12px; }
+.msg.system { align-self:center; color:var(--text3); font-size:11px; padding:4px 0; }
+.chat-input-area { padding:10px 16px 14px; border-top:1px solid var(--border); background:var(--bg2); }
+.chat-input-wrap { display:flex; gap:8px; max-width:var(--chat-max); }
+.chat-input { flex:1; background:var(--surface); border:1px solid var(--border); color:var(--text); padding:9px 12px; border-radius:var(--radius); font-size:13px; font-family:inherit; outline:none; }
+.chat-input:focus { border-color:var(--accent); }
+.chat-input::placeholder { color:var(--text3); }
+.chat-send { background:var(--accent); color:var(--bg); border:none; padding:0 16px; border-radius:var(--radius); font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; }
+.chat-send:hover { background:var(--accent2); }
+.chat-send:disabled { opacity:0.4; }
+.typing { display:inline-flex; gap:4px; padding:10px 14px; }
+.typing span { width:5px; height:5px; background:var(--text3); border-radius:50%; animation:bounce 1.2s infinite; }
+.typing span:nth-child(2) { animation-delay:0.15s; }
+.typing span:nth-child(3) { animation-delay:0.3s; }
+@keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-5px)} }
+
+/* ── REGISTER MODAL ── */
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:100; justify-content:center; align-items:center; }
+.modal-overlay.show { display:flex; }
+.modal { background:var(--bg2); border:1px solid var(--border); border-radius:12px; width:90%; max-width:550px; max-height:85vh; overflow-y:auto; padding:24px; }
+.modal h2 { font-size:16px; margin-bottom:14px; color:var(--accent); }
+.modal label { display:block; font-size:11px; color:var(--text3); margin-bottom:3px; margin-top:10px; }
+.modal input, .modal select, .modal textarea { width:100%; background:var(--surface); border:1px solid var(--border); color:var(--text); padding:7px 10px; border-radius:6px; font-size:13px; font-family:inherit; outline:none; }
+.modal textarea { height:60px; resize:vertical; }
+.modal input:focus, .modal select:focus { border-color:var(--accent); }
+.form-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.form-row3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+.modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:18px; }
+.modal-btn { padding:7px 16px; border-radius:6px; font-size:13px; font-family:inherit; cursor:pointer; border:1px solid var(--border); }
+.modal-btn.primary { background:var(--accent); color:var(--bg); border-color:var(--accent); font-weight:600; }
+.modal-btn.secondary { background:var(--surface); color:var(--text2); }
+
+@media (max-width:768px) {
+  .sidebar { position:fixed; left:0; top:0; bottom:0; z-index:50; transform:translateX(-100%); }
+  .sidebar.open { transform:translateX(0); }
+  .menu-toggle { display:block; }
+  .backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:40; }
+  .backdrop.show { display:block; }
+  .form-row, .form-row3 { grid-template-columns:1fr; }
+  .cat-grid { grid-template-columns:1fr 1fr; }
+  .detail-grid { grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="backdrop" id="backdrop" onclick="toggleSidebar()"></div>
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <div class="logo-icon">🐂</div>
+        <h1>ANGUS DEL ESTE</h1>
+      </div>
+      <div class="logo-sub">Ganadería de Precisión</div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">Principal</div>
+      <div class="nav-item active" onclick="showView('dashboard')"><span class="icon">📊</span> Rodeo<span class="badge" id="navTotal">—</span></div>
+      <div class="nav-item" onclick="showView('chat')"><span class="icon">💬</span> Chat Bot</div>
+
+      <div class="nav-section">Categorías</div>
+      <div id="navCategories"></div>
+
+      <div class="nav-section">Registrar</div>
+      <div class="nav-item" onclick="openRegister('animal')"><span class="icon">➕</span> Nuevo Animal</div>
+      <div class="nav-item" onclick="openRegister('pesada')"><span class="icon">⚖️</span> Pesada</div>
+      <div class="nav-item" onclick="openRegister('sanidad')"><span class="icon">💉</span> Sanidad</div>
+      <div class="nav-item" onclick="openRegister('medicion')"><span class="icon">📐</span> Medición</div>
+    </nav>
+    <div class="sidebar-footer">Angus del Este © 2026</div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+      <button class="topbar-back" id="btnBack" onclick="goBack()">← Volver</button>
+      <span class="topbar-title" id="viewTitle">Rodeo</span>
+    </div>
+
+    <div class="content">
+      <!-- DASHBOARD -->
+      <div class="view active" id="viewDashboard">
+        <div class="dash-header">
+          <h2>Rodeo</h2>
+          <span class="total" id="dashTotal">—</span>
+          <span class="label">cabezas activas</span>
+        </div>
+
+        <div class="section-title">Plantel</div>
+        <div class="cat-grid" id="gridPlantel"></div>
+
+        <div class="section-title">Venta / Descarte</div>
+        <div class="cat-grid" id="gridVenta"></div>
+
+        <div class="section-title">Recría</div>
+        <div class="cat-grid" id="gridRecria"></div>
+      </div>
+
+      <!-- ANIMAL LIST -->
+      <div class="view" id="viewList">
+        <div class="list-header">
+          <h2 id="listTitle">—</h2>
+          <span class="count" id="listCount"></span>
+          <div class="list-filters" id="listFilters"></div>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="animal-table">
+            <thead id="listThead"></thead>
+            <tbody id="listTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- CHAT -->
+      <div class="view" id="viewChat">
+        <div class="chat-container">
+          <div class="chat-messages" id="chatMessages">
+            <div class="msg system">ANGUS DEL ESTE — Ganadería de Precisión</div>
+            <div class="msg bot">¡Hola! Soy el asistente de Angus del Este. 🐂
+
+Podés preguntarme sobre tus animales, registrar pesadas, ecografías, servicios reproductivos, sanidad y más.
+
+Ejemplos:
+• "Ficha del RP 68"
+• "Pesé el RP S401 a 297 kg"
+• "Ranking de peso machos"
+• "Estadísticas ecográficas"</div>
+          </div>
+          <div class="chat-input-area">
+            <div class="chat-input-wrap">
+              <input type="text" class="chat-input" id="chatInput" placeholder="Escribí un mensaje..." autocomplete="off">
+              <button class="chat-send" id="chatSend" onclick="sendMessage()">Enviar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL -->
+<div class="detail-overlay" id="detailOverlay">
+  <div class="detail-card" id="detailCard"></div>
+</div>
+
+<!-- REGISTER MODAL -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<script>
+const API = 'https://angus-del-este-production.up.railway.app';
+let allAnimals = [];
+let currentView = 'dashboard';
+let viewHistory = [];
+
+// ── CATEGORIES DEFINITION ──
+const CATEGORIES = [
+  // Plantel
+  { key:'vacas_pp', label:'Vacas PP', icon:'🐄', filter: a => a.categoria==='VACA' && a.registro==='PP', group:'plantel', destino:'PLANTEL' },
+  { key:'vacas_sa', label:'Vacas SA', icon:'🐄', filter: a => a.categoria==='VACA' && a.registro==='SA', group:'plantel', destino:'PLANTEL' },
+  { key:'vacas_gral', label:'Vacas General', icon:'🐄', filter: a => a.categoria==='VACA' && (a.registro==='GRAL'||a.registro==='GENERAL'), group:'plantel', destino:'PLANTEL' },
+  { key:'toros_plantel', label:'Toros Plantel', icon:'🐂', filter: a => a.categoria==='TORO' && a.destino!=='VENTA', group:'plantel', destino:'PLANTEL' },
+  { key:'vaquillonas', label:'Vaquillonas', icon:'🐄', filter: a => a.categoria==='VAQUILLONA', group:'plantel', destino:'PLANTEL' },
+  // Venta
+  { key:'toros_venta', label:'Toros Venta', icon:'🏷️', filter: a => a.categoria==='TORO' && a.destino==='VENTA', group:'venta', destino:'VENTA' },
+  { key:'vacas_venta', label:'Vacas Venta', icon:'🏷️', filter: a => a.categoria==='VACA' && a.destino==='VENTA', group:'venta', destino:'VENTA' },
+  { key:'novillos', label:'Novillos', icon:'🏷️', filter: a => a.categoria==='NOVILLO', group:'venta', destino:'VENTA' },
+  // Recría
+  { key:'recria_2', label:'Recría 2 Años', icon:'🐮', filter: a => a.categoria==='RECRIA' && getEdadMeses(a.fecha_nac)>=12, group:'recria' },
+  { key:'recria_1', label:'Recría 1 Año', icon:'🐮', filter: a => a.categoria==='RECRIA' && getEdadMeses(a.fecha_nac)<12, group:'recria' },
+  { key:'terneros', label:'Terneros', icon:'🐣', filter: a => a.categoria==='TERNERO', group:'recria' },
+];
+
+function getEdadMeses(fechaNac) {
+  if (!fechaNac) return 0;
+  const diff = new Date() - new Date(fechaNac);
+  return Math.floor(diff / (1000*60*60*24*30.44));
+}
+
+function getEdadTexto(fechaNac) {
+  if (!fechaNac) return '—';
+  const m = getEdadMeses(fechaNac);
+  if (m >= 12) return `${Math.floor(m/12)}a ${m%12}m`;
+  return `${m}m`;
+}
+
+// ── NAVIGATION ──
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('backdrop').classList.toggle('show');
+}
+
+function showView(view, title, pushHistory=true) {
+  if (pushHistory && currentView !== view) viewHistory.push(currentView);
+  currentView = view;
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+
+  const backBtn = document.getElementById('btnBack');
+  const titleEl = document.getElementById('viewTitle');
+
+  if (view === 'dashboard') {
+    document.getElementById('viewDashboard').classList.add('active');
+    titleEl.textContent = 'Rodeo';
+    backBtn.style.display = 'none';
+  } else if (view === 'chat') {
+    document.getElementById('viewChat').classList.add('active');
+    titleEl.textContent = 'Chat Bot';
+    backBtn.style.display = 'none';
+    document.getElementById('chatInput').focus();
+  } else if (view === 'list') {
+    document.getElementById('viewList').classList.add('active');
+    titleEl.textContent = title || 'Animales';
+    backBtn.style.display = 'inline-block';
+  }
+
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if (view === 'dashboard') document.querySelector('.nav-item')?.classList.add('active');
+  if (window.innerWidth < 768) { document.getElementById('sidebar').classList.remove('open'); document.getElementById('backdrop').classList.remove('show'); }
+}
+
+function goBack() {
+  const prev = viewHistory.pop() || 'dashboard';
+  showView(prev, null, false);
+}
+
+// ── LOAD DATA ──
+async function loadAnimals() {
+  try {
+    allAnimals = await fetch(`${API}/api/animales?limite=2000`).then(r => r.json());
+  } catch(e) {
+    allAnimals = [];
+    console.error('Error loading animals:', e);
+  }
+  renderDashboard();
+  renderNavCategories();
+}
+
+function renderDashboard() {
+  const total = allAnimals.length;
+  document.getElementById('dashTotal').textContent = total;
+  document.getElementById('navTotal').textContent = total;
+
+  ['plantel','venta','recria'].forEach(group => {
+    const grid = document.getElementById(group === 'plantel' ? 'gridPlantel' : group === 'venta' ? 'gridVenta' : 'gridRecria');
+    const cats = CATEGORIES.filter(c => c.group === group);
+    grid.innerHTML = cats.map(cat => {
+      const count = allAnimals.filter(cat.filter).length;
+      const pct = total > 0 ? (count/total*100) : 0;
+      return `
+        <div class="cat-card" onclick="openCategory('${cat.key}')">
+          <div class="cat-icon">${cat.icon}</div>
+          <div class="cat-name">${cat.label}</div>
+          <div class="cat-count">${count}</div>
+          <div class="cat-sub">${pct.toFixed(0)}% del rodeo</div>
+          <div class="cat-bar" style="width:${Math.min(pct*2, 100)}%"></div>
+        </div>`;
+    }).join('');
+  });
+}
+
+function renderNavCategories() {
+  const nav = document.getElementById('navCategories');
+  nav.innerHTML = CATEGORIES.map(cat => {
+    const count = allAnimals.filter(cat.filter).length;
+    if (count === 0) return '';
+    return `<div class="nav-item" onclick="openCategory('${cat.key}')"><span class="icon">${cat.icon}</span>${cat.label}<span class="badge">${count}</span></div>`;
+  }).join('');
+}
+
+// ── CATEGORY LIST ──
+async function openCategory(key) {
+  const cat = CATEGORIES.find(c => c.key === key);
+  if (!cat) return;
+
+  const animals = allAnimals.filter(cat.filter);
+  document.getElementById('listTitle').textContent = cat.label;
+  document.getElementById('listCount').textContent = `${animals.length} cabezas`;
+
+  // Load pesadas and ecografias for these animals
+  let pesadasMap = {};
+  let ecografiasMap = {};
+  let medicionesMap = {};
+  try {
+    const [pesadas, ecografias] = await Promise.all([
+      fetch(`${API}/api/pesadas?limite=5000`).then(r=>r.json()),
+      fetch(`${API}/api/ecografias?limite=5000`).then(r=>r.json()),
+    ]);
+    pesadas.forEach(p => {
+      if (!pesadasMap[p.rp]) pesadasMap[p.rp] = [];
+      pesadasMap[p.rp].push(p);
+    });
+    ecografias.forEach(e => {
+      if (!ecografiasMap[e.rp]) ecografiasMap[e.rp] = [];
+      ecografiasMap[e.rp].push(e);
+    });
+  } catch(e) {}
+
+  // Build table based on category type
+  const isVaca = key.startsWith('vacas') || key === 'vaquillonas';
+  const isToro = key.startsWith('toros');
+  const isRecria = key.startsWith('recria') || key === 'terneros';
+
+  let thead = '<tr><th>RP</th><th>Pelo</th><th>Reg</th><th>Edad</th>';
+  if (isVaca) thead += '<th>Últ. Peso</th><th>CC</th><th>Serv</th><th>Terneros</th><th>PPN</th>';
+  else if (isToro) thead += '<th>Peso</th><th>CE</th><th>Padre</th><th>Madre</th>';
+  else if (isRecria) thead += '<th>Sexo</th><th>P.Nac</th><th>P.Destete</th><th>P.Actual</th><th>GDP</th><th>CE</th>';
+  thead += '<th>Estado</th></tr>';
+  document.getElementById('listThead').innerHTML = thead;
+
+  let tbody = '';
+  animals.forEach(a => {
+    const peloDot = a.pelo ? `<span class="pelo-dot ${a.pelo==='NEGRO'?'pelo-negro':'pelo-colorado'}"></span>${a.pelo}` : '—';
+    const regTag = a.registro ? `<span class="tag tag-${(a.registro||'').toLowerCase()}">${a.registro}</span>` : '—';
+    const edad = getEdadTexto(a.fecha_nac);
+
+    const ps = pesadasMap[a.rp] || [];
+    const ecos = ecografiasMap[a.rp] || [];
+    const ultPeso = ps.length > 0 ? ps[0] : null;
+    const pesoNac = ps.find(p => p.contexto === 'NACIMIENTO');
+    const pesoDest = ps.find(p => p.contexto === 'DESTETE');
+
+    let row = `<tr onclick="openAnimalDetail('${a.rp}')">`;
+    row += `<td style="font-weight:600;color:var(--text)">${a.rp}</td>`;
+    row += `<td>${peloDot}</td>`;
+    row += `<td>${regTag}</td>`;
+    row += `<td>${edad}</td>`;
+
+    if (isVaca) {
+      row += `<td>${ultPeso ? ultPeso.peso+'kg' : '—'}</td>`;
+      row += `<td>—</td>`;
+      row += `<td>—</td>`;
+      row += `<td>—</td>`;
+      row += `<td>${pesoNac ? pesoNac.peso+'kg' : '—'}</td>`;
+    } else if (isToro) {
+      row += `<td>${ultPeso ? ultPeso.peso+'kg' : '—'}</td>`;
+      row += `<td>—</td>`;
+      row += `<td>${a.padre_rp||'—'}</td>`;
+      row += `<td>${a.madre_rp||'—'}</td>`;
+    } else if (isRecria) {
+      row += `<td>${a.sexo==='MACHO'?'♂':'♀'}</td>`;
+      row += `<td>${pesoNac ? pesoNac.peso+'kg' : '—'}</td>`;
+      row += `<td>${pesoDest ? pesoDest.peso+'kg' : '—'}</td>`;
+      row += `<td>${ultPeso ? ultPeso.peso+'kg' : '—'}</td>`;
+      const gdp = ultPeso && pesoNac && a.fecha_nac ? ((ultPeso.peso-pesoNac.peso)/getEdadMeses(a.fecha_nac)/30.44*1000).toFixed(0)+'g/d' : '—';
+      row += `<td>${gdp}</td>`;
+      row += `<td>${ecos.length>0 && ecos[0].aob ? ecos[0].aob+'cm²' : '—'}</td>`;
+    }
+
+    row += `<td><span class="tag tag-plantel">Activo</span></td>`;
+    row += '</tr>';
+    tbody += row;
+  });
+
+  document.getElementById('listTbody').innerHTML = tbody || '<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:20px">Sin animales en esta categoría</td></tr>';
+  showView('list', cat.label);
+}
+
+// ── ANIMAL DETAIL ──
+async function openAnimalDetail(rp) {
+  const overlay = document.getElementById('detailOverlay');
+  const card = document.getElementById('detailCard');
+  card.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3)">Cargando...</div>';
+  overlay.classList.add('show');
+
+  try {
+    const data = await fetch(`${API}/api/animales/${encodeURIComponent(rp)}`).then(r=>r.json());
+    if (data.error) { card.innerHTML = `<p style="color:var(--red)">❌ ${data.error}</p>`; return; }
+
+    const edad = getEdadTexto(data.fecha_nac);
+    const peloDot = data.pelo ? `<span class="pelo-dot ${data.pelo==='NEGRO'?'pelo-negro':'pelo-colorado'}"></span>${data.pelo}` : '—';
+
+    let html = `<button class="detail-close" onclick="closeDetail()">✕</button>`;
+    html += `<div class="detail-header">
+      <h2>RP ${data.rp} ${data.chip ? `· ${data.chip}` : ''}</h2>
+      <div class="sub">${data.sexo} · ${data.categoria} · ${data.raza} ${data.registro ? `· <span class="tag tag-${(data.registro||'').toLowerCase()}">${data.registro}</span>` : ''}</div>
+    </div>`;
+
+    html += `<div class="detail-grid">
+      <div class="detail-field"><label>Pelo</label><div class="val">${peloDot}</div></div>
+      <div class="detail-field"><label>Edad</label><div class="val">${edad}</div></div>
+      <div class="detail-field"><label>Nacimiento</label><div class="val">${data.fecha_nac||'—'}</div></div>
+      <div class="detail-field"><label>Estado</label><div class="val" style="color:var(--accent)">${data.estado}</div></div>
+      <div class="detail-field"><label>Madre</label><div class="val">${data.madre_rp||'—'}</div></div>
+      <div class="detail-field"><label>Padre</label><div class="val">${data.padre_rp||'—'}</div></div>
+    </div>`;
+
+    // Pesadas
+    if (data.pesadas?.length) {
+      html += `<div class="detail-section"><h3>⚖️ Pesadas</h3><table class="detail-table">
+        <tr><th>Fecha</th><th>Peso</th><th>Contexto</th><th>GDP</th></tr>`;
+      data.pesadas.forEach(p => {
+        html += `<tr><td>${p.fecha}</td><td>${p.peso} kg</td><td>${p.contexto}</td><td>${p.gdp ? (p.gdp*1000).toFixed(0)+'g/d' : '—'}</td></tr>`;
+      });
+      html += '</table></div>';
+    }
+
+    // Ecografías
+    if (data.ecografias?.length) {
+      html += `<div class="detail-section"><h3>🥩 Ecografías</h3><table class="detail-table">
+        <tr><th>Fecha</th><th>%GI</th><th>AOB</th><th>GD</th><th>GC</th><th>Días</th><th>Estado</th></tr>`;
+      data.ecografias.forEach(e => {
+        html += `<tr><td>${e.fecha_medicion}</td><td>${e.pct_gi||'—'}</td><td>${e.aob||'—'} cm²</td><td>${e.gd||'—'} mm</td><td>${e.gc||'—'} mm</td><td>${e.dias_vida||'—'}</td><td>${e.estado||'—'}</td></tr>`;
+      });
+      html += '</table></div>';
+    }
+
+    // Servicios
+    if (data.servicios?.length) {
+      html += `<div class="detail-section"><h3>🔄 Servicios</h3><table class="detail-table">
+        <tr><th>Temporada</th><th>Tipo</th><th>Toro/Semen</th><th>Resultado</th><th>Cría</th></tr>`;
+      data.servicios.forEach(s => {
+        html += `<tr><td>${s.temporada||'—'}</td><td>${s.tipo_servicio||'—'}</td><td>${s.semen_iatf||s.toro_natural||'—'}</td><td>${s.resultado||'pendiente'}</td><td>${s.ternero_rp||'—'}</td></tr>`;
+      });
+      html += '</table></div>';
+    }
+
+    // Sanidad
+    if (data.sanidad?.length) {
+      html += `<div class="detail-section"><h3>💉 Sanidad</h3><table class="detail-table">
+        <tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th>Dosis</th></tr>`;
+      data.sanidad.forEach(s => {
+        html += `<tr><td>${s.fecha}</td><td>${s.tipo}</td><td>${s.producto||'—'}</td><td>${s.dosis||'—'}</td></tr>`;
+      });
+      html += '</table></div>';
+    }
+
+    // Hijos
+    if (data.hijos?.length) {
+      html += `<div class="detail-section"><h3>👶 Crías (${data.hijos.length})</h3><table class="detail-table">
+        <tr><th>RP</th><th>Sexo</th><th>Nacimiento</th><th>Estado</th></tr>`;
+      data.hijos.forEach(h => {
+        html += `<tr><td>${h.rp}</td><td>${h.sexo}</td><td>${h.fecha_nac||'—'}</td><td>${h.estado}</td></tr>`;
+      });
+      html += '</table></div>';
+    }
+
+    card.innerHTML = html;
+  } catch(e) {
+    card.innerHTML = `<button class="detail-close" onclick="closeDetail()">✕</button><p style="color:var(--red)">❌ Error: ${e.message}</p>`;
+  }
+}
+
+function closeDetail() { document.getElementById('detailOverlay').classList.remove('show'); }
+document.getElementById('detailOverlay').addEventListener('click', e => { if (e.target === document.getElementById('detailOverlay')) closeDetail(); });
+
+// ── CHAT ──
+let sending = false;
+function addMsg(text, type) {
+  const div = document.createElement('div');
+  div.className = `msg ${type}`;
+  div.textContent = text;
+  document.getElementById('chatMessages').appendChild(div);
+  const c = document.getElementById('chatMessages');
+  setTimeout(() => c.scrollTop = c.scrollHeight, 50);
+}
+
+async function sendMessage() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text || sending) return;
+  addMsg(text, 'user');
+  input.value = '';
+  sending = true;
+  document.getElementById('chatSend').disabled = true;
+
+  const ti = document.createElement('div'); ti.className='msg bot'; ti.id='typing';
+  ti.innerHTML='<div class="typing"><span></span><span></span><span></span></div>';
+  document.getElementById('chatMessages').appendChild(ti);
+
+  try {
+    const resp = await fetch(`${API}/webhook-interno`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({Body:text}) });
+    const data = await resp.json();
+    document.getElementById('typing')?.remove();
+    addMsg(data.respuesta || 'Sin respuesta', 'bot');
+    loadAnimals(); // refresh
+  } catch(e) {
+    document.getElementById('typing')?.remove();
+    addMsg('❌ Error de conexión.', 'bot');
+  }
+  sending = false;
+  document.getElementById('chatSend').disabled = false;
+  input.focus();
+}
+document.getElementById('chatInput').addEventListener('keydown', e => { if (e.key==='Enter') { e.preventDefault(); sendMessage(); } });
+
+// ── REGISTER MODALS ──
+function openRegister(type) {
+  const overlay = document.getElementById('modalOverlay');
+  const content = document.getElementById('modalContent');
+  if (window.innerWidth<768) toggleSidebar();
+
+  const modals = {
+    animal: `<h2>➕ Nuevo Animal</h2>
+      <div class="form-row"><div><label>RP *</label><input id="r_rp"></div><div><label>CHIP</label><input id="r_chip"></div></div>
+      <div class="form-row3">
+        <div><label>Sexo *</label><select id="r_sexo"><option>MACHO</option><option>HEMBRA</option></select></div>
+        <div><label>Pelo</label><select id="r_pelo"><option value="">—</option><option>NEGRO</option><option>COLORADO</option></select></div>
+        <div><label>Registro</label><select id="r_reg"><option value="">—</option><option>PP</option><option>SA</option><option>GENERAL</option></select></div>
+      </div>
+      <div class="form-row3">
+        <div><label>Categoría</label><select id="r_cat"><option>TERNERO</option><option>RECRIA</option><option>VAQUILLONA</option><option>VACA</option><option>NOVILLO</option><option>TORO</option></select></div>
+        <div><label>Destino</label><select id="r_dest"><option>PLANTEL</option><option>VENTA</option></select></div>
+        <div><label>Nacimiento</label><input type="date" id="r_fnac"></div>
+      </div>
+      <div class="form-row"><div><label>Madre RP</label><input id="r_madre"></div><div><label>Padre RP</label><input id="r_padre"></div></div>
+      <label>Notas</label><textarea id="r_notas"></textarea>
+      <div class="modal-actions"><button class="modal-btn secondary" onclick="closeModal()">Cancelar</button><button class="modal-btn primary" onclick="submitRegister('animal')">Registrar</button></div>`,
+
+    pesada: `<h2>⚖️ Registrar Pesada</h2>
+      <div class="form-row"><div><label>RP *</label><input id="r_rp2"></div><div><label>Peso (kg) *</label><input type="number" id="r_peso" step="0.1"></div></div>
+      <label>Contexto</label><select id="r_ctx"><option>DESARROLLO</option><option>NACIMIENTO</option><option>DESTETE</option><option>AÑO</option><option>18MESES</option><option>ADULTA</option><option>VENTA</option></select>
+      <div class="modal-actions"><button class="modal-btn secondary" onclick="closeModal()">Cancelar</button><button class="modal-btn primary" onclick="submitRegister('pesada')">Registrar</button></div>`,
+
+    sanidad: `<h2>💉 Sanidad</h2>
+      <div class="form-row"><div><label>RP *</label><input id="r_rp3"></div><div><label>Tipo</label><select id="r_stipo"><option>TRATAMIENTO</option><option>VACUNA</option><option>DESPARASITACION</option><option>OBSERVACION</option></select></div></div>
+      <div class="form-row"><div><label>Producto</label><input id="r_prod"></div><div><label>Dosis</label><input id="r_dosis"></div></div>
+      <label>Notas</label><textarea id="r_snotas"></textarea>
+      <div class="modal-actions"><button class="modal-btn secondary" onclick="closeModal()">Cancelar</button><button class="modal-btn primary" onclick="submitRegister('sanidad')">Registrar</button></div>`,
+
+    medicion: `<h2>📐 Medición</h2>
+      <div class="form-row3"><div><label>RP *</label><input id="r_rp4"></div><div><label>Tipo</label><select id="r_mtipo"><option>CE</option><option>CC</option><option>ALTURA</option><option>FRAME</option><option>DOCILIDAD</option></select></div><div><label>Valor *</label><input type="number" id="r_mval" step="0.1"></div></div>
+      <div class="modal-actions"><button class="modal-btn secondary" onclick="closeModal()">Cancelar</button><button class="modal-btn primary" onclick="submitRegister('medicion')">Registrar</button></div>`,
+  };
+  content.innerHTML = modals[type] || '';
+  overlay.classList.add('show');
+}
+
+function closeModal() { document.getElementById('modalOverlay').classList.remove('show'); }
+document.getElementById('modalOverlay').addEventListener('click', e => { if (e.target===document.getElementById('modalOverlay')) closeModal(); });
+
+async function submitRegister(type) {
+  let msg = '';
+  if (type==='animal') {
+    const rp = document.getElementById('r_rp').value.trim();
+    if (!rp) return alert('RP es obligatorio');
+    msg = `Registrar animal RP ${rp}, chip ${document.getElementById('r_chip').value||'sin chip'}, ${document.getElementById('r_sexo').value}, pelo ${document.getElementById('r_pelo').value||'no definido'}, registro ${document.getElementById('r_reg').value||'sin registro'}, categoría ${document.getElementById('r_cat').value}, nacimiento ${document.getElementById('r_fnac').value||'sin fecha'}, madre ${document.getElementById('r_madre').value||'desconocida'}, padre ${document.getElementById('r_padre').value||'desconocido'}`;
+  } else if (type==='pesada') {
+    const rp = document.getElementById('r_rp2').value.trim();
+    const peso = document.getElementById('r_peso').value;
+    if (!rp||!peso) return alert('RP y Peso obligatorios');
+    msg = `Pesé el RP ${rp} a ${peso} kg, contexto ${document.getElementById('r_ctx').value}`;
+  } else if (type==='sanidad') {
+    const rp = document.getElementById('r_rp3').value.trim();
+    if (!rp) return alert('RP obligatorio');
+    msg = `Registrar ${document.getElementById('r_stipo').value} RP ${rp}, producto ${document.getElementById('r_prod').value||'—'}, dosis ${document.getElementById('r_dosis').value||'—'}`;
+  } else if (type==='medicion') {
+    const rp = document.getElementById('r_rp4').value.trim();
+    const val = document.getElementById('r_mval').value;
+    if (!rp||!val) return alert('RP y Valor obligatorios');
+    msg = `Medir ${document.getElementById('r_mtipo').value} del RP ${rp}: ${val}`;
+  }
+  closeModal();
+  showView('chat');
+  document.getElementById('chatInput').value = msg;
+  sendMessage();
+}
+
+// ── INIT ──
+loadAnimals();
+</script>
+</body>
+</html>
