@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>AMAKAIK — Ganadería de Precisión</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0f0d;
+  --bg2: #111916;
+  --bg3: #1a2420;
+  --surface: #1e2b26;
+  --surface2: #253530;
+  --border: #2d3f38;
+  --border2: #3a5249;
+  --text: #e8efe9;
+  --text2: #9ab3a4;
+  --text3: #6b8a78;
+  --accent: #4ade80;
+  --accent2: #22c55e;
+  --accent-dim: rgba(74,222,128,0.12);
+  --red: #ef4444;
+  --amber: #f59e0b;
+  --blue: #3b82f6;
+  --radius: 10px;
+  --chat-max: 720px;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { height:100%; overflow:hidden; }
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* ── LAYOUT ── */
+.app { display:flex; height:100vh; }
+
+/* ── SIDEBAR ── */
+.sidebar {
+  width: 260px;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: transform 0.3s;
+}
+.sidebar-header {
+  padding: 20px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.logo-icon {
+  width: 36px; height: 36px;
+  background: var(--accent-dim);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+.logo h1 {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--accent);
+}
+.logo-sub {
+  font-size: 11px;
+  color: var(--text3);
+  margin-left: 46px;
+  margin-top: -2px;
+  letter-spacing: 0.5px;
+}
+
+.sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 8px;
+}
+.nav-section {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text3);
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  padding: 12px 12px 6px;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 13.5px;
+  color: var(--text2);
+  transition: all 0.15s;
+  user-select: none;
+}
+.nav-item:hover { background: var(--surface); color: var(--text); }
+.nav-item.active { background: var(--accent-dim); color: var(--accent); font-weight: 500; }
+.nav-item .icon { width:20px; text-align:center; font-size:15px; }
+
+.sidebar-stats {
+  padding: 14px 16px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text3);
+}
+.sidebar-stats .stat-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+}
+.sidebar-stats .stat-val { color: var(--text2); font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+
+/* ── MAIN ── */
+.main { flex:1; display:flex; flex-direction:column; min-width:0; }
+
+/* ── TOP BAR ── */
+.topbar {
+  height: 52px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text2);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px;
+}
+.topbar-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.topbar-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-weight: 500;
+}
+.topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.topbar-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.topbar-btn:hover { background: var(--surface2); color: var(--text); }
+
+/* ── CONTENT AREA ── */
+.content { flex:1; overflow:hidden; display:flex; flex-direction:column; }
+
+/* ── CHAT VIEW ── */
+.chat-view { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.chat-messages::-webkit-scrollbar { width:5px; }
+.chat-messages::-webkit-scrollbar-track { background:transparent; }
+.chat-messages::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+.msg {
+  max-width: var(--chat-max);
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  animation: msgIn 0.25s ease-out;
+}
+@keyframes msgIn { from { opacity:0; transform:translateY(8px); } }
+.msg.user {
+  align-self: flex-end;
+  background: var(--accent-dim);
+  border: 1px solid var(--border2);
+  color: var(--text);
+}
+.msg.bot {
+  align-self: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: 'JetBrains Mono', 'DM Sans', monospace;
+  font-size: 13px;
+}
+.msg.system {
+  align-self: center;
+  background: transparent;
+  color: var(--text3);
+  font-size: 12px;
+  border: none;
+  padding: 4px 0;
+}
+
+.chat-input-area {
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg2);
+}
+.chat-input-wrap {
+  display: flex;
+  gap: 8px;
+  max-width: var(--chat-max);
+  margin: 0 auto;
+}
+.chat-input {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.chat-input:focus { border-color: var(--accent); }
+.chat-input::placeholder { color: var(--text3); }
+.chat-send {
+  background: var(--accent);
+  color: var(--bg);
+  border: none;
+  padding: 0 18px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.chat-send:hover { background: var(--accent2); }
+.chat-send:disabled { opacity:0.4; cursor:default; }
+
+/* ── DASHBOARD VIEW ── */
+.dashboard-view {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: none;
+}
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.dash-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.dash-card-label {
+  font-size: 11px;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 6px;
+}
+.dash-card-value {
+  font-size: 26px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--accent);
+}
+.dash-card-sub {
+  font-size: 12px;
+  color: var(--text3);
+  margin-top: 4px;
+}
+
+.dash-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text2);
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dash-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+.dash-table th {
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+}
+.dash-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text2);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
+.dash-table tr:hover td { background: var(--surface); }
+
+/* ── QUICK ACTIONS ── */
+.quick-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 0 20px 8px;
+}
+.quick-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  padding: 5px 10px;
+  border-radius: 14px;
+  font-size: 11.5px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.quick-btn:hover { background: var(--accent-dim); color: var(--accent); border-color: var(--border2); }
+
+/* ── IMPORT MODAL ── */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 100;
+  justify-content: center;
+  align-items: center;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: 24px;
+}
+.modal h2 {
+  font-size: 16px;
+  margin-bottom: 16px;
+  color: var(--accent);
+}
+.modal label {
+  display: block;
+  font-size: 12px;
+  color: var(--text3);
+  margin-bottom: 4px;
+  margin-top: 12px;
+}
+.modal input, .modal select, .modal textarea {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+}
+.modal textarea { height: 80px; resize: vertical; }
+.modal input:focus, .modal select:focus, .modal textarea:focus { border-color: var(--accent); }
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+.modal-btn {
+  padding: 8px 18px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid var(--border);
+}
+.modal-btn.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 600; }
+.modal-btn.secondary { background: var(--surface); color: var(--text2); }
+.form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+
+/* ── LOADING ── */
+.typing {
+  display: inline-flex;
+  gap: 4px;
+  padding: 12px 16px;
+}
+.typing span {
+  width: 6px; height: 6px;
+  background: var(--text3);
+  border-radius: 50%;
+  animation: bounce 1.2s infinite;
+}
+.typing span:nth-child(2) { animation-delay: 0.15s; }
+.typing span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-6px)} }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 768px) {
+  .sidebar { position:fixed; left:0; top:0; bottom:0; z-index:50; transform:translateX(-100%); }
+  .sidebar.open { transform:translateX(0); }
+  .menu-toggle { display:block; }
+  .backdrop {
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:40;
+  }
+  .backdrop.show { display:block; }
+  .form-row { grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="backdrop" id="backdrop" onclick="toggleSidebar()"></div>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <div class="logo-icon">🐂</div>
+        <h1>AMAKAIK</h1>
+      </div>
+      <div class="logo-sub">Ganadería de Precisión</div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">Principal</div>
+      <div class="nav-item active" data-view="chat" onclick="switchView('chat')">
+        <span class="icon">💬</span> Chat Bot
+      </div>
+      <div class="nav-item" data-view="dashboard" onclick="switchView('dashboard')">
+        <span class="icon">📊</span> Dashboard
+      </div>
+
+      <div class="nav-section">Registros</div>
+      <div class="nav-item" onclick="openModal('animal')">
+        <span class="icon">🐄</span> Nuevo Animal
+      </div>
+      <div class="nav-item" onclick="openModal('pesada')">
+        <span class="icon">⚖️</span> Registrar Pesada
+      </div>
+      <div class="nav-item" onclick="openModal('sanidad')">
+        <span class="icon">💉</span> Sanidad
+      </div>
+      <div class="nav-item" onclick="openModal('medicion')">
+        <span class="icon">📐</span> Medición
+      </div>
+
+      <div class="nav-section">Consultas rápidas</div>
+      <div class="nav-item" onclick="sendQuick('ver rodeo')">
+        <span class="icon">🏷️</span> Ver Rodeo
+      </div>
+      <div class="nav-item" onclick="sendQuick('ver ultimos registros')">
+        <span class="icon">📋</span> Últimos Registros
+      </div>
+      <div class="nav-item" onclick="sendQuick('estadísticas ecográficas')">
+        <span class="icon">🥩</span> Ecografías
+      </div>
+      <div class="nav-item" onclick="sendQuick('resumen servicios')">
+        <span class="icon">🔄</span> Servicios
+      </div>
+    </nav>
+    <div class="sidebar-stats" id="sidebarStats">
+      <div class="stat-row"><span>Cabezas</span><span class="stat-val" id="statCabezas">—</span></div>
+      <div class="stat-row"><span>Ecografías</span><span class="stat-val" id="statEcos">—</span></div>
+      <div class="stat-row"><span>Pesadas</span><span class="stat-val" id="statPesadas">—</span></div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+      <span class="topbar-title" id="viewTitle">Chat Bot</span>
+      <span class="topbar-badge">Angus</span>
+      <div class="topbar-right">
+        <button class="topbar-btn" onclick="openModal('importar')">📥 Importar</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <!-- CHAT -->
+      <div class="chat-view" id="chatView">
+        <div class="chat-messages" id="chatMessages">
+          <div class="msg system">AMAKAIK — Ganadería de Precisión · Angus</div>
+          <div class="msg bot">¡Hola! Soy el asistente de AMAKAIK. 🐂
+
+Podés preguntarme sobre tus animales, registrar pesadas, ecografías, servicios reproductivos, sanidad y más.
+
+Algunas cosas que puedo hacer:
+• "Ficha del RP 68"
+• "Pesé el RP S401 a 297 kg"
+• "Ver rodeo"
+• "Ecografías del RP 80"
+• "Registrar parto madre RP S219, ternero macho, 32kg"</div>
+        </div>
+        <div class="quick-actions">
+          <button class="quick-btn" onclick="sendQuick('ver rodeo')">🏷️ Rodeo</button>
+          <button class="quick-btn" onclick="sendQuick('ver últimos')">📋 Últimos</button>
+          <button class="quick-btn" onclick="sendQuick('ranking de peso')">🏆 Ranking</button>
+          <button class="quick-btn" onclick="sendQuick('estadísticas ecográficas')">🥩 Ecografías</button>
+          <button class="quick-btn" onclick="sendQuick('ver cuentas corrientes proveedores')">🔄 Servicios</button>
+        </div>
+        <div class="chat-input-area">
+          <div class="chat-input-wrap">
+            <input type="text" class="chat-input" id="chatInput" placeholder="Escribí un mensaje..." autocomplete="off">
+            <button class="chat-send" id="chatSend" onclick="sendMessage()">Enviar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DASHBOARD -->
+      <div class="dashboard-view" id="dashboardView"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODALS -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<script>
+// ── CONFIG ──
+const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? `http://localhost:${window.location.port || 3001}`
+  : 'https://angus-del-este-production.up.railway.app';
+
+// ── STATE ──
+let sending = false;
+
+// ── SIDEBAR ──
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('backdrop').classList.toggle('show');
+}
+
+function switchView(view) {
+  document.querySelectorAll('.nav-item[data-view]').forEach(el => el.classList.remove('active'));
+  document.querySelector(`.nav-item[data-view="${view}"]`)?.classList.add('active');
+
+  document.getElementById('chatView').style.display = view === 'chat' ? 'flex' : 'none';
+  document.getElementById('dashboardView').style.display = view === 'dashboard' ? 'block' : 'none';
+  document.getElementById('viewTitle').textContent = view === 'chat' ? 'Chat Bot' : 'Dashboard';
+
+  if (view === 'dashboard') loadDashboard();
+  if (window.innerWidth < 768) toggleSidebar();
+}
+
+// ── CHAT ──
+function addMessage(text, type) {
+  const div = document.createElement('div');
+  div.className = `msg ${type}`;
+  div.textContent = text;
+  document.getElementById('chatMessages').appendChild(div);
+  scrollChat();
+}
+
+function scrollChat() {
+  const c = document.getElementById('chatMessages');
+  setTimeout(() => c.scrollTop = c.scrollHeight, 50);
+}
+
+function showTyping() {
+  const div = document.createElement('div');
+  div.className = 'msg bot';
+  div.id = 'typingIndicator';
+  div.innerHTML = '<div class="typing"><span></span><span></span><span></span></div>';
+  document.getElementById('chatMessages').appendChild(div);
+  scrollChat();
+}
+
+function hideTyping() {
+  document.getElementById('typingIndicator')?.remove();
+}
+
+async function sendMessage() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text || sending) return;
+
+  addMessage(text, 'user');
+  input.value = '';
+  sending = true;
+  document.getElementById('chatSend').disabled = true;
+  showTyping();
+
+  try {
+    const resp = await fetch(`${API_URL}/webhook-interno`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ Body: text })
+    });
+    const data = await resp.json();
+    hideTyping();
+    addMessage(data.respuesta || 'Sin respuesta', 'bot');
+  } catch (err) {
+    hideTyping();
+    addMessage('❌ Error de conexión. Verificá que el servidor esté corriendo.', 'bot');
+  }
+  sending = false;
+  document.getElementById('chatSend').disabled = false;
+  input.focus();
+}
+
+function sendQuick(text) {
+  switchView('chat');
+  document.getElementById('chatInput').value = text;
+  sendMessage();
+}
+
+document.getElementById('chatInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+
+// ── DASHBOARD ──
+async function loadDashboard() {
+  const dash = document.getElementById('dashboardView');
+  dash.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3)">Cargando...</div>';
+
+  try {
+    const [resumen, animales, ecografias] = await Promise.all([
+      fetch(`${API_URL}/api/resumen`).then(r => r.json()),
+      fetch(`${API_URL}/api/animales?limite=20`).then(r => r.json()),
+      fetch(`${API_URL}/api/ecografias?limite=10`).then(r => r.json()),
+    ]);
+
+    let catBreakdown = '';
+    if (resumen.por_categoria) {
+      resumen.por_categoria.forEach(c => {
+        catBreakdown += `<div class="stat-row"><span>${c.categoria || 'S/D'} (${c.sexo || ''})</span><span class="stat-val">${c.n}</span></div>`;
+      });
+    }
+
+    let animalesRows = '';
+    animales.slice(0, 20).forEach(a => {
+      animalesRows += `<tr onclick="sendQuick('ficha del RP ${a.rp}')" style="cursor:pointer">
+        <td>${a.rp}</td><td>${a.chip || '—'}</td><td>${a.sexo}</td><td>${a.pelo || '—'}</td>
+        <td>${a.categoria || '—'}</td><td>${a.fecha_nac || '—'}</td><td>${a.estado}</td>
+      </tr>`;
+    });
+
+    let ecoRows = '';
+    ecografias.slice(0, 10).forEach(e => {
+      ecoRows += `<tr>
+        <td>${e.rp}</td><td>${e.sexo}</td><td>${e.fecha_medicion}</td>
+        <td>${e.pct_gi || '—'}</td><td>${e.aob || '—'}</td><td>${e.gd || '—'}</td><td>${e.gc || '—'}</td>
+        <td>${e.estado || '—'}</td>
+      </tr>`;
+    });
+
+    dash.innerHTML = `
+      <div class="dash-grid">
+        <div class="dash-card">
+          <div class="dash-card-label">Cabezas Activas</div>
+          <div class="dash-card-value">${resumen.total}</div>
+          <div class="dash-card-sub">Rodeo total</div>
+        </div>
+        <div class="dash-card">
+          <div class="dash-card-label">Ecografías</div>
+          <div class="dash-card-value">${resumen.total_ecografias}</div>
+          <div class="dash-card-sub">Registradas</div>
+        </div>
+        <div class="dash-card">
+          <div class="dash-card-label">Servicios</div>
+          <div class="dash-card-value">${resumen.total_servicios}</div>
+          <div class="dash-card-sub">Reproductivos</div>
+        </div>
+        <div class="dash-card">
+          <div class="dash-card-label">Sanidad</div>
+          <div class="dash-card-value">${resumen.total_sanidad}</div>
+          <div class="dash-card-sub">Tratamientos</div>
+        </div>
+      </div>
+
+      <div class="dash-section-title">Composición del Rodeo</div>
+      <div class="dash-card" style="margin-bottom:24px">
+        <div class="sidebar-stats">${catBreakdown || '<em style="color:var(--text3)">Sin datos aún</em>'}</div>
+      </div>
+
+      <div class="dash-section-title">Últimos Animales</div>
+      <div style="overflow-x:auto; margin-bottom:24px">
+        <table class="dash-table">
+          <thead><tr><th>RP</th><th>CHIP</th><th>Sexo</th><th>Pelo</th><th>Cat</th><th>Nac</th><th>Estado</th></tr></thead>
+          <tbody>${animalesRows || '<tr><td colspan="7" style="text-align:center;color:var(--text3)">Sin animales</td></tr>'}</tbody>
+        </table>
+      </div>
+
+      ${ecoRows ? `
+      <div class="dash-section-title">Últimas Ecografías</div>
+      <div style="overflow-x:auto">
+        <table class="dash-table">
+          <thead><tr><th>RP</th><th>Sexo</th><th>Fecha</th><th>%GI</th><th>AOB</th><th>GD</th><th>GC</th><th>Estado</th></tr></thead>
+          <tbody>${ecoRows}</tbody>
+        </table>
+      </div>` : ''}
+    `;
+  } catch (err) {
+    dash.innerHTML = `<div style="text-align:center;padding:40px;color:var(--red)">❌ Error cargando datos. Verificá conexión al servidor.<br><small>${err.message}</small></div>`;
+  }
+}
+
+// ── MODALS ──
+function openModal(type) {
+  const overlay = document.getElementById('modalOverlay');
+  const content = document.getElementById('modalContent');
+  if (window.innerWidth < 768) toggleSidebar();
+
+  const modals = {
+    animal: `
+      <h2>🐄 Registrar Animal</h2>
+      <div class="form-row">
+        <div><label>RP *</label><input id="m_rp" placeholder="Ej: S401"></div>
+        <div><label>CHIP</label><input id="m_chip" placeholder="8 dígitos"></div>
+      </div>
+      <div class="form-row">
+        <div><label>Sexo *</label><select id="m_sexo"><option>MACHO</option><option>HEMBRA</option></select></div>
+        <div><label>Pelo</label><select id="m_pelo"><option value="">—</option><option>NEGRO</option><option>COLORADO</option></select></div>
+      </div>
+      <div class="form-row">
+        <div><label>Categoría</label><select id="m_cat"><option>TERNERO</option><option>RECRIA</option><option selected>VAQUILLONA</option><option>VACA</option><option>NOVILLO</option><option>TORO</option></select></div>
+        <div><label>Registro</label><select id="m_reg"><option value="">—</option><option>PP</option><option>SA</option><option>GRAL</option></select></div>
+      </div>
+      <div class="form-row">
+        <div><label>Fecha Nacimiento</label><input type="date" id="m_fnac"></div>
+        <div><label>Raza</label><input id="m_raza" value="A. ANGUS"></div>
+      </div>
+      <div class="form-row">
+        <div><label>Madre RP</label><input id="m_madre"></div>
+        <div><label>Padre RP</label><input id="m_padre"></div>
+      </div>
+      <label>Notas</label><textarea id="m_notas"></textarea>
+      <div class="modal-actions">
+        <button class="modal-btn secondary" onclick="closeModal()">Cancelar</button>
+        <button class="modal-btn primary" onclick="submitAnimal()">Registrar</button>
+      </div>`,
+
+    pesada: `
+      <h2>⚖️ Registrar Pesada</h2>
+      <div class="form-row">
+        <div><label>RP *</label><input id="p_rp" placeholder="Ej: 68"></div>
+        <div><label>Peso (kg) *</label><input type="number" id="p_peso" step="0.1"></div>
+      </div>
+      <label>Contexto</label>
+      <select id="p_ctx"><option>DESARROLLO</option><option>NACIMIENTO</option><option>DESTETE</option><option>AÑO</option><option>18MESES</option><option>ADULTA</option><option>VENTA</option></select>
+      <label>Notas</label><textarea id="p_notas"></textarea>
+      <div class="modal-actions">
+        <button class="modal-btn secondary" onclick="closeModal()">Cancelar</button>
+        <button class="modal-btn primary" onclick="submitPesada()">Registrar</button>
+      </div>`,
+
+    sanidad: `
+      <h2>💉 Registrar Sanidad</h2>
+      <div class="form-row">
+        <div><label>RP *</label><input id="s_rp" placeholder="Ej: S401"></div>
+        <div><label>Tipo</label><select id="s_tipo"><option>TRATAMIENTO</option><option>VACUNA</option><option>DESPARASITACION</option><option>OBSERVACION</option></select></div>
+      </div>
+      <div class="form-row">
+        <div><label>Producto</label><input id="s_producto" placeholder="Ej: Ivermectina"></div>
+        <div><label>Dosis</label><input id="s_dosis" placeholder="Ej: 5ml"></div>
+      </div>
+      <label>Notas</label><textarea id="s_notas"></textarea>
+      <div class="modal-actions">
+        <button class="modal-btn secondary" onclick="closeModal()">Cancelar</button>
+        <button class="modal-btn primary" onclick="submitSanidad()">Registrar</button>
+      </div>`,
+
+    medicion: `
+      <h2>📐 Registrar Medición</h2>
+      <div class="form-row">
+        <div><label>RP *</label><input id="med_rp" placeholder="Ej: 76"></div>
+        <div><label>Tipo</label><select id="med_tipo"><option>CE</option><option>CC</option><option>ALTURA</option><option>FRAME</option><option>DOCILIDAD</option></select></div>
+      </div>
+      <label>Valor *</label><input type="number" id="med_valor" step="0.1">
+      <label>Notas</label><textarea id="med_notas"></textarea>
+      <div class="modal-actions">
+        <button class="modal-btn secondary" onclick="closeModal()">Cancelar</button>
+        <button class="modal-btn primary" onclick="submitMedicion()">Registrar</button>
+      </div>`,
+
+    importar: `
+      <h2>📥 Importar Datos</h2>
+      <p style="font-size:13px; color:var(--text3); margin-bottom:16px">
+        Usá el chat para importar datos de tus Excel. Por ejemplo:
+      </p>
+      <div style="background:var(--surface); padding:12px; border-radius:8px; font-size:12px; font-family:'JetBrains Mono',monospace; color:var(--text2); margin-bottom:12px">
+        "Importar los datos de ecografía del PDF del CIIE"<br>
+        "Cargar los animales del Excel de nacimientos"<br>
+        "Registrar lote de pesadas: RP 68 420kg, RP 70 385kg..."
+      </div>
+      <p style="font-size:12px; color:var(--text3)">
+        También podés usar la API REST directamente:<br>
+        POST /api/importar/animales<br>
+        POST /api/importar/ecografias<br>
+        POST /api/importar/pesadas
+      </p>
+      <div class="modal-actions">
+        <button class="modal-btn secondary" onclick="closeModal()">Cerrar</button>
+        <button class="modal-btn primary" onclick="closeModal(); switchView('chat');">Ir al Chat</button>
+      </div>`
+  };
+
+  content.innerHTML = modals[type] || '';
+  overlay.classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('show');
+}
+
+document.getElementById('modalOverlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modalOverlay')) closeModal();
+});
+
+// ── FORM SUBMITS ──
+async function submitAnimal() {
+  const rp = document.getElementById('m_rp').value.trim();
+  if (!rp) return alert('RP es obligatorio');
+  const msg = `Registrar animal RP ${rp}, chip ${document.getElementById('m_chip').value || 'sin chip'}, ` +
+    `${document.getElementById('m_sexo').value}, pelo ${document.getElementById('m_pelo').value || 'no definido'}, ` +
+    `categoría ${document.getElementById('m_cat').value}, registro ${document.getElementById('m_reg').value || 'sin registro'}, ` +
+    `nacimiento ${document.getElementById('m_fnac').value || 'sin fecha'}, raza ${document.getElementById('m_raza').value}, ` +
+    `madre ${document.getElementById('m_madre').value || 'desconocida'}, padre ${document.getElementById('m_padre').value || 'desconocido'}` +
+    (document.getElementById('m_notas').value ? `, notas: ${document.getElementById('m_notas').value}` : '');
+  closeModal();
+  switchView('chat');
+  document.getElementById('chatInput').value = msg;
+  sendMessage();
+}
+
+async function submitPesada() {
+  const rp = document.getElementById('p_rp').value.trim();
+  const peso = document.getElementById('p_peso').value;
+  if (!rp || !peso) return alert('RP y Peso son obligatorios');
+  closeModal();
+  switchView('chat');
+  document.getElementById('chatInput').value = `Pesé el RP ${rp} a ${peso} kg, contexto ${document.getElementById('p_ctx').value}`;
+  sendMessage();
+}
+
+async function submitSanidad() {
+  const rp = document.getElementById('s_rp').value.trim();
+  if (!rp) return alert('RP es obligatorio');
+  const prod = document.getElementById('s_producto').value;
+  const dosis = document.getElementById('s_dosis').value;
+  closeModal();
+  switchView('chat');
+  document.getElementById('chatInput').value = `Registrar ${document.getElementById('s_tipo').value} para RP ${rp}${prod ? `, producto ${prod}` : ''}${dosis ? `, dosis ${dosis}` : ''}${document.getElementById('s_notas').value ? `, notas: ${document.getElementById('s_notas').value}` : ''}`;
+  sendMessage();
+}
+
+async function submitMedicion() {
+  const rp = document.getElementById('med_rp').value.trim();
+  const val = document.getElementById('med_valor').value;
+  if (!rp || !val) return alert('RP y Valor son obligatorios');
+  closeModal();
+  switchView('chat');
+  document.getElementById('chatInput').value = `Medir ${document.getElementById('med_tipo').value} del RP ${rp}: ${val}`;
+  sendMessage();
+}
+
+// ── INIT ──
+async function loadStats() {
+  try {
+    const data = await fetch(`${API_URL}/api/resumen`).then(r => r.json());
+    document.getElementById('statCabezas').textContent = data.total || 0;
+    document.getElementById('statEcos').textContent = data.total_ecografias || 0;
+    document.getElementById('statPesadas').textContent = data.ultima_pesada || '—';
+  } catch(e) {}
+}
+
+loadStats();
+document.getElementById('chatInput').focus();
+</script>
+
+</body>
+</html>
