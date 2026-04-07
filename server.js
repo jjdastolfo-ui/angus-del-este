@@ -190,18 +190,10 @@ function fmt(n) {
 }
 
 function buscarAnimal(identificador) {
-  // Buscar por RP (prioritario), chip, o id — solo activos
+  // Buscar por RP (prioritario), chip, o id
   let animal = db.prepare("SELECT * FROM animales WHERE LOWER(rp) = LOWER(?) AND estado = 'ACTIVO'").get(identificador);
   if (!animal) animal = db.prepare("SELECT * FROM animales WHERE chip = ? AND estado = 'ACTIVO'").get(identificador);
   if (!animal) animal = db.prepare("SELECT * FROM animales WHERE id = ? AND estado = 'ACTIVO'").get(parseInt(identificador));
-  return animal;
-}
-
-function buscarAnimalTodos(identificador) {
-  // Buscar en TODOS los estados (para importación de histórico)
-  let animal = db.prepare("SELECT * FROM animales WHERE LOWER(rp) = LOWER(?)").get(identificador);
-  if (!animal) animal = db.prepare("SELECT * FROM animales WHERE chip = ?").get(identificador);
-  if (!animal) animal = db.prepare("SELECT * FROM animales WHERE id = ?").get(parseInt(identificador));
   return animal;
 }
 
@@ -736,7 +728,7 @@ function ejecutarAccion(accion) {
     if (!Array.isArray(accion.ecografias)) return "❌ Formato inválido.";
     let ok = 0, errores = 0;
     for (const e of accion.ecografias) {
-      const animal = buscarAnimalTodos(e.rp);
+      const animal = buscarAnimal(e.rp);
       if (!animal) { errores++; continue; }
       try {
         db.prepare(`INSERT INTO ecografias (animal_id, fecha_medicion, dias_vida, pct_gi, aob, gd, gc, estado) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
@@ -752,7 +744,7 @@ function ejecutarAccion(accion) {
     if (!Array.isArray(accion.pesadas)) return "❌ Formato inválido.";
     let ok = 0, errores = 0;
     for (const p of accion.pesadas) {
-      const animal = buscarAnimalTodos(p.rp);
+      const animal = buscarAnimal(p.rp);
       if (!animal) { errores++; continue; }
       try {
         db.prepare("INSERT INTO pesadas (animal_id, fecha, peso, contexto) VALUES (?, ?, ?, ?)")
@@ -917,12 +909,11 @@ app.post("/api/importar/pesadas", (req, res) => {
 });
 
 app.post("/api/importar/servicios", (req, res) => {
-  // Usa buscarAnimalTodos para incluir vendidos
   const { servicios } = req.body;
   if (!Array.isArray(servicios)) return res.status(400).json({ error: "Formato inválido" });
   let ok = 0, errores = 0;
   for (const s of servicios) {
-    const animal = buscarAnimalTodos(s.rp);
+    const animal = buscarAnimal(s.rp);
     if (!animal) { errores++; continue; }
     try {
       db.prepare(`
@@ -940,7 +931,7 @@ app.post("/api/importar/sanidad", (req, res) => {
   if (!Array.isArray(sanidad)) return res.status(400).json({ error: "Formato inválido" });
   let ok = 0, errores = 0;
   for (const s of sanidad) {
-    const animal = buscarAnimalTodos(s.rp);
+    const animal = buscarAnimal(s.rp);
     if (!animal) { errores++; continue; }
     try {
       db.prepare("INSERT INTO sanidad (animal_id, fecha, tipo, producto, dosis, notas) VALUES (?, ?, ?, ?, ?, ?)")
@@ -956,7 +947,7 @@ app.post("/api/importar/mediciones", (req, res) => {
   if (!Array.isArray(mediciones)) return res.status(400).json({ error: "Formato inválido" });
   let ok = 0, errores = 0;
   for (const m of mediciones) {
-    const animal = buscarAnimalTodos(m.rp);
+    const animal = buscarAnimal(m.rp);
     if (!animal) { errores++; continue; }
     try {
       db.prepare("INSERT INTO mediciones (animal_id, fecha, tipo, valor, notas) VALUES (?, ?, ?, ?, ?)")
