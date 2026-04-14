@@ -6,10 +6,11 @@
   "scripts": {
     "start": "node server.js"
   },
-  "dependencies": {
-  "express": "^4.x",
-  "@anthropic-ai/sdk": "^x.x",
-  "better-sqlite3": "^x.x",
-  "pdfkit": "^0.15.0"
-  }
+"dependencies": {
+  "express": "...",
+  "@anthropic-ai/sdk": "...",
+  "better-sqlite3": "...",
+  "pdfkit": "^0.15.0",
+  "twilio": "^5.0.0"
+}
 }
