@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ANGUS DEL ESTE — Ganadería de Precisión</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
+:root {
+  --bg: #f3f0e8;
+  --bg2: #faf8f3;
+  --surface: #ffffff;
+  --surface2: #f5f2eb;
+  --surface3: #ebe7dd;
+  --border: #e5dfd2;
+  --border2: #d4cdbf;
+  --text: #2c2418;
+  --text2: #6b5d4a;
+  --text3: #9b8e7a;
+  --accent: #5a7340;
+  --accent2: #4a6234;
+  --accent-dim: rgba(90,115,64,0.08);
+  --green: #5a7340;
+  --gold: #8b7355;
+  --red: #c75450;
+  --amber: #c4a35a;
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.04);
+  --shadow2: 0 4px 12px rgba(0,0,0,0.06);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { height:100%; overflow:hidden; }
+body { font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; background:var(--bg); color:var(--text); -webkit-font-smoothing:antialiased; }
+
+.app { display:flex; height:100vh; }
+
+/* ── SIDEBAR ── */
+.sidebar {
+  width:240px; background:var(--bg2); border-right:1px solid var(--border);
+  display:flex; flex-direction:column; flex-shrink:0; transition:transform 0.3s;
+}
+.sidebar-header { padding:20px 16px 12px; border-bottom:1px solid var(--border); }
+.logo { display:flex; align-items:center; gap:10px; }
+.logo-icon { width:34px; height:34px; background:#5a7340; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:16px; }
+.logo h1 { font-size:15px; font-weight:600; color:var(--text); letter-spacing:-0.3px; }
+
+.sidebar-nav { flex:1; overflow-y:auto; padding:8px; }
+.nav-section { font-size:10px; font-weight:600; color:var(--text3); letter-spacing:1.2px; text-transform:uppercase; padding:18px 10px 6px; }
+.nav-item {
+  display:flex; align-items:center; gap:9px; padding:8px 12px; border-radius:8px;
+  cursor:pointer; font-size:13px; color:var(--text2); transition:all 0.15s; font-weight:400;
+}
+.nav-item:hover { background:var(--surface2); color:var(--text); }
+.nav-item.active { background:var(--accent-dim); color:var(--accent); font-weight:500; }
+.nav-item .icon { width:18px; text-align:center; font-size:14px; }
+.nav-item .badge {
+  margin-left:auto; background:var(--surface2); color:var(--text3); font-size:11px;
+  padding:2px 8px; border-radius:10px; font-weight:500;
+}
+.nav-item.active .badge { background:rgba(90,115,64,0.12); color:var(--accent); }
+.inia-btn { background:var(--accent);color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;cursor:pointer;width:100%;font-family:inherit;font-weight:500;transition:all 0.15s; }
+.inia-btn:hover { background:var(--accent2); }
+.inia-btn:disabled { opacity:0.5;cursor:not-allowed; }
+.inia-status { margin-top:8px;font-size:12px;color:var(--text3); }
+
+.sidebar-footer { padding:12px 16px; border-top:1px solid var(--border); font-size:10px; color:var(--text3); }
+
+/* ── MAIN ── */
+.main { flex:1; display:flex; flex-direction:column; min-width:0; background:var(--bg); }
+
+.topbar {
+  height:50px; background:var(--bg2); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; padding:0 20px; gap:10px; flex-shrink:0;
+}
+.menu-toggle { display:none; background:none; border:none; color:var(--text2); font-size:18px; cursor:pointer; }
+.topbar-title { font-size:14px; font-weight:600; color:var(--text); letter-spacing:-0.2px; }
+.topbar-back { background:none; border:none; color:var(--accent); padding:4px 0; font-size:13px; cursor:pointer; font-family:inherit; display:none; font-weight:500; }
+
+.content { flex:1; overflow:hidden; position:relative; }
+.view { position:absolute; inset:0; overflow-y:auto; padding:20px; display:none; }
+.view.active { display:block; }
+
+/* ── DASHBOARD ── */
+.dash-header { display:flex; align-items:baseline; gap:10px; margin-bottom:20px; }
+.dash-header h2 { font-size:22px; font-weight:700; letter-spacing:-0.5px; color:var(--text); }
+.dash-header .total { font-size:22px; font-weight:700; color:var(--accent); }
+.dash-header .label { font-size:13px; color:var(--text3); font-weight:400; }
+
+.section-title { font-size:10px; font-weight:600; color:var(--text3); letter-spacing:1px; text-transform:uppercase; margin-bottom:10px; margin-top:4px; }
+
+.cat-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:8px; margin-bottom:24px; }
+.cat-card {
+  background:var(--surface); border:0.5px solid var(--border); border-radius:10px;
+  padding:12px 14px; cursor:pointer; transition:all 0.2s; display:flex; align-items:center; gap:10px;
+}
+.cat-card:hover { border-color:var(--accent); background:var(--surface2); }
+.cat-card .cat-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+.cat-card .cat-icon { font-size:20px; margin-bottom:0; display:none; }
+.cat-card .cat-name { font-size:13px; font-weight:400; color:var(--text2); flex:1; }
+.cat-card .cat-count { font-size:16px; font-weight:600; color:var(--text); }
+.cat-card .cat-sub { display:none; }
+
+/* ── TABLE ── */
+.animal-table { width:100%; border-collapse:collapse; font-size:13px; }
+.animal-table th {
+  text-align:left; padding:8px 10px; font-size:10px; font-weight:600; color:var(--text3);
+  text-transform:uppercase; letter-spacing:0.5px; border-bottom:1px solid var(--border);
+  position:sticky; top:0; background:var(--bg); z-index:2;
+}
+.animal-table td { padding:8px 10px; border-bottom:0.5px solid var(--border); color:var(--text2); font-size:13px; }
+.animal-table tr:hover td { background:var(--accent-dim); }
+.animal-table tr { cursor:pointer; }
+.pelo-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; vertical-align:middle; }
+.pelo-negro { background:#2c2418; border:1px solid #d4cdbf; }
+.pelo-colorado { background:#a0522d; }
+.tag { display:inline-block; padding:2px 8px; border-radius:5px; font-size:11px; font-weight:500; }
+.tag-pp { background:rgba(90,115,64,0.1); color:#5a7340; }
+.tag-sa { background:rgba(196,163,90,0.12); color:#8b7355; }
+.tag-general { background:rgba(155,142,122,0.12); color:#6b5d4a; }
+
+/* ── BULK BAR ── */
+.bulk-bar {
+  display:none; position:sticky; bottom:0; left:0; right:0; background:var(--bg2);
+  border-top:1px solid var(--border); padding:10px 16px; box-shadow:0 -2px 8px rgba(0,0,0,0.04);
+  align-items:center; gap:10px; z-index:10;
+}
+.bulk-bar.show { display:flex; }
+.bulk-bar .bulk-count { font-size:13px; font-weight:600; color:var(--accent); }
+.bulk-btn {
+  background:var(--accent); color:#fff; border:none; padding:6px 14px; border-radius:6px;
+  font-size:12px; font-weight:500; cursor:pointer; font-family:inherit;
+}
+.bulk-btn:hover { background:var(--accent2); }
+.bulk-btn.danger { background:var(--red); }
+
+/* ── DETAIL ── */
+.detail-overlay { display:none; position:fixed; inset:0; background:rgba(44,36,24,0.3); z-index:100; justify-content:center; align-items:flex-start; padding:40px 20px; overflow-y:auto; backdrop-filter:blur(4px); }
+.detail-overlay.show { display:flex; }
+.detail-card { background:var(--bg2); border:0.5px solid var(--border); border-radius:14px; width:100%; max-width:680px; padding:24px; box-shadow:var(--shadow2); }
+.detail-close { position:absolute; top:12px; right:16px; background:none; border:none; color:var(--text3); font-size:18px; cursor:pointer; }
+.detail-section { margin-top:16px; }
+.detail-section h3 { font-size:12px; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; padding-bottom:4px; border-bottom:0.5px solid var(--border); font-weight:600; }
+.detail-table { width:100%; border-collapse:collapse; font-size:12px; }
+.detail-table th { text-align:left; padding:5px 8px; font-size:10px; color:var(--text3); border-bottom:0.5px solid var(--border); font-weight:600; text-transform:uppercase; }
+.detail-table td { padding:5px 8px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+.ed-input { width:100%; background:var(--surface); border:0.5px solid var(--border); color:var(--text); padding:6px 10px; border-radius:6px; font-size:12px; font-family:inherit; outline:none; }
+.ed-input:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(90,115,64,0.1); }
+.ed-label { font-size:10px; color:var(--text3); font-weight:500; margin-bottom:2px; display:block; }
+
+/* ── CHAT ── */
+.chat-container { display:flex; flex-direction:column; height:100%; }
+.chat-messages { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:10px; }
+.msg { max-width:640px; padding:10px 14px; border-radius:var(--radius); font-size:13px; line-height:1.5; white-space:pre-wrap; word-break:break-word; animation:msgIn 0.2s ease-out; }
+@keyframes msgIn { from { opacity:0; transform:translateY(4px); } }
+.msg.user { align-self:flex-end; background:var(--accent); color:#fff; border-radius:18px 18px 4px 18px; }
+.msg.bot { align-self:flex-start; background:var(--surface); border:0.5px solid var(--border); color:var(--text); border-radius:18px 18px 18px 4px; font-size:12.5px; }
+.msg.system { align-self:center; color:var(--text3); font-size:11px; }
+.chat-input-area { padding:10px 16px 14px; border-top:1px solid var(--border); background:var(--bg2); }
+.chat-input-wrap { display:flex; gap:8px; max-width:640px; }
+.chat-input { flex:1; background:var(--surface); border:0.5px solid var(--border); color:var(--text); padding:10px 14px; border-radius:20px; font-size:13px; font-family:inherit; outline:none; }
+.chat-input:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(90,115,64,0.1); }
+.chat-input::placeholder { color:var(--text3); }
+.chat-send { background:var(--accent); color:#fff; border:none; width:36px; height:36px; border-radius:50%; font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.15s; }
+.chat-send:hover { background:var(--accent2); }
+.typing { display:inline-flex; gap:4px; padding:10px; }
+.typing span { width:5px; height:5px; background:var(--text3); border-radius:50%; animation:bounce 1.2s infinite; }
+.typing span:nth-child(2) { animation-delay:0.15s; }
+.typing span:nth-child(3) { animation-delay:0.3s; }
+@keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-5px)} }
+
+/* ── MODAL ── */
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(44,36,24,0.3); z-index:100; justify-content:center; align-items:center; backdrop-filter:blur(4px); }
+.modal-overlay.show { display:flex; }
+.modal { background:var(--bg2); border:0.5px solid var(--border); border-radius:14px; width:90%; max-width:520px; max-height:85vh; overflow-y:auto; padding:24px; box-shadow:var(--shadow2); }
+.modal h2 { font-size:16px; font-weight:600; margin-bottom:14px; color:var(--text); }
+.modal label { display:block; font-size:11px; color:var(--text3); margin-bottom:2px; margin-top:10px; font-weight:500; }
+.modal input, .modal select, .modal textarea { width:100%; background:var(--surface); border:0.5px solid var(--border); color:var(--text); padding:8px 10px; border-radius:8px; font-size:13px; font-family:inherit; outline:none; }
+.modal input:focus, .modal select:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(90,115,64,0.1); }
+.form-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.form-row3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+.modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:18px; }
+.modal-btn { padding:8px 18px; border-radius:8px; font-size:13px; font-family:inherit; cursor:pointer; border:none; font-weight:500; transition:all 0.15s; }
+.modal-btn.primary { background:var(--accent); color:#fff; }
+.modal-btn.primary:hover { background:var(--accent2); }
+.modal-btn.secondary { background:var(--surface2); color:var(--text2); border:0.5px solid var(--border); }
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width:6px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+::-webkit-scrollbar-thumb:hover { background:var(--border2); }
+
+@media (max-width:768px) {
+  .sidebar { position:fixed; left:0; top:0; bottom:0; z-index:50; transform:translateX(-100%); }
+  .sidebar.open { transform:translateX(0); }
+  .menu-toggle { display:block; }
+  .backdrop { display:none; position:fixed; inset:0; background:rgba(44,36,24,0.3); z-index:40; }
+  .backdrop.show { display:block; }
+  .form-row,.form-row3 { grid-template-columns:1fr; }
+  .cat-grid { grid-template-columns:1fr 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="backdrop" id="backdrop" onclick="toggleSidebar()"></div>
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo"><div class="logo-icon">🐂</div><h1 id="campoNombre">Cargando...</h1></div>
+      <select id="campoSelect" class="ed-input" style="margin:4px 8px 0;font-size:12px;padding:4px 8px;border-radius:6px" onchange="cambiarCampo(this.value)">
+      </select>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">Principal</div>
+      <div class="nav-item active" onclick="showView('dashboard')"><span class="icon">📊</span> Rodeo<span class="badge" id="navTotal">—</span></div>
+      <div class="nav-item" onclick="showView('chat')"><span class="icon">💬</span> Chat</div>
+      <div class="nav-section">Categorías</div>
+      <div id="navCategories"></div>
+      <div class="nav-section">Registrar</div>
+      <div class="nav-item" onclick="openRegister('animal')"><span class="icon">➕</span> Nuevo Animal</div>
+      <div class="nav-item" onclick="openRegister('pesada')"><span class="icon">⚖️</span> Pesada</div>
+      <div class="nav-item" onclick="openRegister('sanidad')"><span class="icon">💉</span> Sanidad</div>
+      <div class="nav-item" onclick="openRegister('medicion')"><span class="icon">📐</span> Medición</div>
+      <div class="nav-item" onclick="openRegister('servicio')"><span class="icon">🔄</span> Servicio</div>
+      <div class="nav-section">Gallagher</div>
+      <div class="nav-item" onclick="openRegister('gallagher')"><span class="icon">📡</span> Cargar CSV</div>
+      <div class="nav-section">Gestión</div>
+      <div class="nav-item" onclick="showView('lotes')"><span class="icon">🏷️</span> Lotes<span class="badge" id="navLotes">—</span></div>
+      <div class="nav-item" onclick="openRegister('servicios_csv')"><span class="icon">📋</span> Servicios CSV</div>
+      <div class="nav-section">Informes</div>
+      <div class="nav-item" onclick="showView('bajas','Bajas')"><span class="icon">📋</span> Bajas</div>
+      <div class="nav-item" onclick="downloadPDF('rodeo')"><span class="icon">📄</span> Rodeo PDF</div>
+      <div class="nav-item" onclick="downloadPDF('pesadas')"><span class="icon">📄</span> Pesadas PDF</div>
+      <div class="nav-item" onclick="downloadPDF('servicios')"><span class="icon">📄</span> Servicios PDF</div>
+      <div class="nav-item" onclick="downloadPDF('sanidad')"><span class="icon">📄</span> Sanidad PDF</div>
+      <div class="nav-section">INIA / Breedplan</div>
+      <div class="nav-item" onclick="showView('inia')"><span class="icon">📋</span> Planillas INIA</div>
+    </nav>
+    <div class="sidebar-footer">Angus del Este © 2026</div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+      <button class="topbar-back" id="btnBack" onclick="goBack()">← Volver</button>
+      <span class="topbar-title" id="viewTitle">Rodeo</span>
+    </div>
+    <div class="content">
+      <div class="view active" id="viewDashboard">
+        <div class="dash-header"><h2>Rodeo</h2><span class="total" id="dashTotal">—</span><span class="label">cabezas activas</span>
+          <button onclick="recalcular()" style="margin-left:auto;background:var(--surface);border:1px solid var(--border2);color:var(--text2);padding:5px 12px;border-radius:6px;font-size:11px;cursor:pointer;font-family:inherit" title="Recalcular categorías, contextos y GDP">🔄 Recalcular</button>
+        </div>
+        <div style="margin-bottom:16px"><input type="text" id="searchInput" placeholder="Buscar por RP o chip..." style="width:100%;max-width:360px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:10px;font-size:13px;font-family:inherit;outline:none" oninput="doSearch(this.value)"><div id="searchResults" style="display:none;background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-top:4px;max-width:360px;box-shadow:var(--shadow2);max-height:240px;overflow-y:auto"></div></div>
+        <div class="section-title">Plantel</div><div class="cat-grid" id="gridPlantel"></div>
+        <div class="section-title">Venta</div><div class="cat-grid" id="gridVenta"></div>
+        <div class="section-title">Recría</div><div class="cat-grid" id="gridRecria"></div>
+      </div>
+      <div class="view" id="viewList">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+          <h2 id="listTitle">—</h2><span id="listCount" style="font-size:13px;color:var(--text3)"></span>
+          <div style="margin-left:auto;display:flex;gap:6px">
+            <button onclick="selectAll()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;font-family:inherit">Sel. todos</button>
+            <button onclick="selectNone()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;font-family:inherit">Ninguno</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto"><table class="animal-table"><thead id="listThead"></thead><tbody id="listTbody"></tbody></table></div>
+        <div class="bulk-bar" id="bulkBar">
+          <span class="bulk-count" id="bulkCount">0 seleccionados</span>
+          <button class="bulk-btn" onclick="bulkServicio()" style="background:#7b1fa2">🔄 Servicio</button>
+          <button class="bulk-btn" onclick="bulkAsignarLote()" style="background:#ff9500">🏷️ Asignar a lote</button>
+          <button class="bulk-btn" onclick="bulkSanidad()">💉 Sanidad lote</button>
+          <button class="bulk-btn danger" onclick="bulkBaja()">📤 Dar baja</button>
+        </div>
+      </div>
+      <div class="view" id="viewLotes">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+          <h2>🏷️ Lotes</h2>
+          <button onclick="openCrearLote()" style="background:var(--accent);color:#fff;border:none;padding:6px 14px;border-radius:8px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:500">+ Nuevo Lote</button>
+        </div>
+        <div id="lotesGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px"></div>
+      </div>
+      <div class="view" id="viewLoteDetail">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+          <h2 id="loteDetailTitle">—</h2><span id="loteDetailCount" style="font-size:13px;color:var(--text3)"></span>
+          <div id="loteDetailInfo" style="font-size:11px;color:var(--text3);margin-left:8px"></div>
+          <div style="margin-left:auto;display:flex;gap:6px">
+            <button onclick="editarLote()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:5px 12px;border-radius:6px;font-size:11px;cursor:pointer;font-family:inherit">✎ Editar lote</button>
+            <button onclick="openAgregarAnimalesLote()" style="background:var(--accent);color:#fff;border:none;padding:5px 12px;border-radius:6px;font-size:11px;cursor:pointer;font-family:inherit">+ Agregar</button>
+            <button onclick="loteSanidadMasiva()" style="background:var(--green);color:#fff;border:none;padding:5px 12px;border-radius:6px;font-size:11px;cursor:pointer;font-family:inherit">💉 Sanidad lote</button>
+            <button onclick="eliminarLote()" style="background:var(--red);color:#fff;border:none;padding:5px 12px;border-radius:6px;font-size:11px;cursor:pointer;font-family:inherit">🗑️ Eliminar</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto"><table class="animal-table"><thead><tr><th></th><th>RP</th><th>Sexo</th><th>Pelo</th><th>Categoría</th><th>Registro</th><th>Edad</th><th></th></tr></thead><tbody id="loteDetailBody"></tbody></table></div>
+      </div>
+      <div class="view" id="viewChat">
+        <div class="chat-container">
+          <div class="chat-messages" id="chatMessages">
+            <div class="msg system">Angus del Este — Ganadería de Precisión</div>
+            <div class="msg bot">¡Hola! Soy tu asistente ganadero. Podés preguntarme sobre animales, registrar datos, o cargar archivos del bastón Gallagher.
+
+Ejemplos:
+• "Ficha del RP S219"
+• "Nació ternero madre S219, hembra colorado, 28kg"
+• "Baja RP RE13 por venta"
+• "Vacuné contra aftosa a S219, S211, S228"</div>
+          </div>
+          <div class="chat-input-area"><div class="chat-input-wrap">
+            <input type="text" class="chat-input" id="chatInput" placeholder="Escribí un mensaje..." autocomplete="off">
+            <button class="chat-send" id="chatSend" onclick="sendMessage()">↑</button>
+          </div></div>
+        </div>
+      </div>
+      <div class="view" id="viewINIA">
+        <h2 style="margin-bottom:4px">📋 Informes INIA / Breedplan</h2>
+        <p style="color:var(--text3);font-size:13px;margin-bottom:20px">Generá las planillas Excel para enviar a INIA. Escribí los RP de los animales separados por coma, espacio o Enter.</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px">
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
+            <h3 style="font-size:15px;margin-bottom:4px">📊 Planilla Destete</h3>
+            <p style="color:var(--text3);font-size:12px;margin-bottom:8px">Peso destete, manejo, lote, padre y datos de madre.</p>
+            <label style="font-size:12px;font-weight:500">Animales (RP)</label>
+            <textarea class="ed-input" id="inia_dest_rps" rows="3" placeholder="S501, S502, S503, ADE10, ADE11..." style="margin:4px 0 8px;width:100%;resize:vertical;font-family:inherit"></textarea>
+            <label style="font-size:12px;font-weight:500">Manejo</label>
+            <select class="ed-input" id="inia_dest_manejo" style="margin:4px 0 8px;width:100%"></select>
+            <label style="font-size:12px;font-weight:500">Fecha real pesada</label>
+            <input type="date" class="ed-input" id="inia_dest_fecha" style="margin:4px 0 12px;width:100%">
+            <button onclick="iniaDescargar('destete')" class="inia-btn" id="btnDest">📊 Generar Destete</button>
+            <div class="inia-status" id="stDest"></div>
+          </div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
+            <h3 style="font-size:15px;margin-bottom:4px">📊 Planilla 18 Meses</h3>
+            <p style="color:var(--text3);font-size:12px;margin-bottom:8px">Peso 18m, CE, altura, frame.</p>
+            <label style="font-size:12px;font-weight:500">Animales (RP)</label>
+            <textarea class="ed-input" id="inia_18m_rps" rows="3" placeholder="S402, S404, S406..." style="margin:4px 0 8px;width:100%;resize:vertical;font-family:inherit"></textarea>
+            <label style="font-size:12px;font-weight:500">Manejo</label>
+            <select class="ed-input" id="inia_18m_manejo" style="margin:4px 0 12px;width:100%"></select>
+            <button onclick="iniaDescargar('18meses')" class="inia-btn" id="btn18m">📊 Generar 18 Meses</button>
+            <div class="inia-status" id="st18m"></div>
+          </div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
+            <h3 style="font-size:15px;margin-bottom:4px">📊 Planilla Servicio</h3>
+            <p style="color:var(--text3);font-size:12px;margin-bottom:8px">Tipo servicio, semen, toro, resultado, cría.</p>
+            <label style="font-size:12px;font-weight:500">Animales (RP)</label>
+            <textarea class="ed-input" id="inia_serv_rps" rows="3" placeholder="S219, S220, S211, 3535..." style="margin:4px 0 12px;width:100%;resize:vertical;font-family:inherit"></textarea>
+            <button onclick="iniaDescargar('servicio')" class="inia-btn" id="btnServ">📊 Generar Servicio</button>
+            <div class="inia-status" id="stServ"></div>
+          </div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
+            <h3 style="font-size:15px;margin-bottom:4px">📥 Completar Planilla 299</h3>
+            <p style="color:var(--text3);font-size:12px;margin-bottom:12px">Subí el Excel 299 de INIA (destete o 18 meses) y el sistema detecta el formato y completa los datos automáticamente.</p>
+            <label style="font-size:12px;font-weight:500">Manejo</label>
+            <select class="ed-input" id="inia_comp_manejo" style="margin:4px 0 8px;width:100%"></select>
+            <label style="font-size:12px;font-weight:500">Archivo Excel 299</label>
+            <input type="file" id="inia_comp_file" accept=".xlsx" style="margin:4px 0 12px;display:block;font-size:12px">
+            <button onclick="iniaCompletar()" class="inia-btn" id="btnComp">📥 Completar y Descargar</button>
+            <div class="inia-status" id="stComp"></div>
+          </div>
+        </div>
+        <div style="margin-top:24px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+            <h3 style="font-size:15px;margin:0">🏷️ Números HBU (Herd Book Uruguay)</h3>
+            <button onclick="loadHBU()" class="inia-btn" style="width:auto;padding:6px 14px;font-size:12px">🔄 Cargar</button>
+          </div>
+          <p style="color:var(--text3);font-size:12px;margin-bottom:12px">Cargá los números HBU de INIA para que aparezcan en las planillas. Editá directo en la tabla.</p>
+          <div style="overflow-x:auto;max-height:400px;overflow-y:auto">
+            <table class="animal-table" id="hbuTable">
+              <thead><tr><th>RP</th><th>Reg.</th><th>Cat.</th><th>HBU Animal</th><th>HBU Madre</th><th>HBU Padre</th><th></th></tr></thead>
+              <tbody id="hbuBody"></tbody>
+            </table>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+            <span style="font-size:12px;color:var(--text3)" id="hbuInfo"></span>
+          </div>
+        </div>
+      </div>
+      <div class="view" id="viewBajas">
+        <h2 style="margin-bottom:16px">📋 Registro de Bajas</h2>
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+          <button onclick="loadBajas('VENDIDO')" class="inia-btn" style="width:auto;padding:6px 16px" id="btnVendidos">🏷️ Vendidos</button>
+          <button onclick="loadBajas('MUERTO')" class="inia-btn" style="width:auto;padding:6px 16px;background:var(--red)" id="btnMuertos">💀 Muertos</button>
+          <button onclick="loadBajas('TODOS')" class="inia-btn" style="width:auto;padding:6px 16px;background:var(--gold)" id="btnTodos">📋 Todos</button>
+          <span style="margin-left:auto;font-size:13px;color:var(--text3)" id="bajasInfo"></span>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="animal-table" id="bajasTable">
+            <thead><tr><th>RP</th><th>Categoría</th><th>Registro</th><th>Sexo</th><th>Fecha Salida</th><th>Motivo</th><th>Estado</th><th></th></tr></thead>
+            <tbody id="bajasBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="detail-overlay" id="detailOverlay"><div class="detail-card" id="detailCard" style="position:relative"></div></div>
+<div class="modal-overlay" id="modalOverlay"><div class="modal" id="modalContent"></div></div>
+
+<script>
+const API_BASE = window.location.hostname==='localhost'||window.location.hostname==='127.0.0.1'
+  ? `http://localhost:${window.location.port||3001}`
+  : 'https://angus-del-este-production.up.railway.app';
+let campoActual = localStorage.getItem('campo') || 'angus_del_este';
+const API = API_BASE; // alias for existing code
+function apiUrl(path){ return `${API_BASE}${path}${path.includes('?')?'&':'?'}campo=${campoActual}`; }
+let allAnimals=[], currentView='dashboard', viewHistory=[];
+
+// Cargar campos disponibles
+async function loadCampos(){
+  try{
+    const campos=await fetch(`${API_BASE}/api/campos`).then(r=>r.json());
+    const sel=document.getElementById('campoSelect');
+    sel.innerHTML=campos.map(c=>`<option value="${c.key}" ${c.key===campoActual?'selected':''}>${c.nombre} (${c.pais}) — ${c.animales} cab.</option>`).join('');
+    const actual=campos.find(c=>c.key===campoActual)||campos[0];
+    document.getElementById('campoNombre').textContent=actual.nombre;
+  }catch(e){console.error('Error cargando campos:',e);}
+}
+// Override fetch to auto-append campo parameter
+const _origFetch = window.fetch;
+window.fetch = function(url, opts) {
+  if (typeof url === 'string' && url.includes('/api/') && !url.includes('campo=')) {
+    url += (url.includes('?') ? '&' : '?') + 'campo=' + campoActual;
+  }
+  return _origFetch.call(this, url, opts);
+};
+
+function cambiarCampo(key){
+  campoActual=key;
+  localStorage.setItem('campo',key);
+  const opt=document.getElementById('campoSelect').selectedOptions[0];
+  document.getElementById('campoNombre').textContent=opt?opt.text.split(' (')[0]:'';
+  loadAnimals();
+  loadLotes();
+}
+
+const CATEGORIES = [
+  {key:'vacas_pp',label:'Vacas PP',icon:'🐄',color:'#5a7340',filter:a=>a.categoria==='VACA'&&a.registro==='PP',group:'plantel'},
+  {key:'vacas_sa',label:'Vacas SA',icon:'🐄',color:'#7c9a5e',filter:a=>a.categoria==='VACA'&&a.registro==='SA',group:'plantel',solo:['angus_del_este']},
+  {key:'vacas_gral',label:'Vacas General',icon:'🐄',color:'#9b8e7a',filter:a=>a.categoria==='VACA'&&(a.registro==='GENERAL'||a.registro==='GRAL'),group:'plantel',solo:['angus_del_este']},
+  {key:'toros_plantel',label:'Toros Plantel',icon:'🐂',color:'#8b7355',filter:a=>a.categoria==='TORO'&&a.destino!=='VENTA',group:'plantel'},
+  {key:'vaquillonas',label:'Vaquillonas',icon:'🐄',color:'#c4a35a',filter:a=>a.categoria==='VAQUILLONA',group:'plantel'},
+  {key:'toros_venta',label:'Toros Venta',icon:'🏷️',color:'#c75450',filter:a=>a.categoria==='TORO'&&a.destino==='VENTA',group:'venta'},
+  {key:'vacas_venta',label:'Vacas Venta',icon:'🏷️',color:'#b07a4a',filter:a=>(a.categoria==='VACA'||a.categoria==='VAQUILLONA')&&a.destino==='VENTA',group:'venta'},
+  {key:'novillos',label:'Novillos',icon:'🏷️',color:'#6b5d4a',filter:a=>a.categoria==='NOVILLO',group:'venta',solo:['angus_del_este']},
+  {key:'recria_2',label:'Recría 2 Años',icon:'🐮',color:'#8b7355',filter:a=>a.categoria==='RECRIA'&&getEdadMeses(a.fecha_nac)>=12,group:'recria'},
+  {key:'recria_1',label:'Recría 1 Año',icon:'🐮',color:'#a09078',filter:a=>a.categoria==='RECRIA'&&getEdadMeses(a.fecha_nac)<12,group:'recria'},
+  {key:'terneros',label:'Terneros',icon:'🐣',color:'#b0a892',filter:a=>a.categoria==='TERNERO',group:'recria'},
+];
+function getCategorias(){ return CATEGORIES.filter(c=>!c.solo||c.solo.includes(campoActual)); }
+
+function getEdadMeses(f){if(!f)return 0;return Math.floor((new Date()-new Date(f))/(1000*60*60*24*30.44));}
+function getEdadTexto(f){if(!f)return'—';const m=getEdadMeses(f);return m>=12?`${Math.floor(m/12)}a ${m%12}m`:`${m}m`;}
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('backdrop').classList.toggle('show');}
+
+function showView(v,t,push=true){
+  if(push&&currentView!==v)viewHistory.push(currentView);currentView=v;
+  document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
+  const bb=document.getElementById('btnBack'),tt=document.getElementById('viewTitle');
+  if(v==='dashboard'){document.getElementById('viewDashboard').classList.add('active');tt.textContent='Rodeo';bb.style.display='none';}
+  else if(v==='chat'){document.getElementById('viewChat').classList.add('active');tt.textContent='Chat';bb.style.display='none';document.getElementById('chatInput').focus();}
+  else if(v==='list'){document.getElementById('viewList').classList.add('active');tt.textContent=t||'Animales';bb.style.display='inline';}
+  else if(v==='lotes'){document.getElementById('viewLotes').classList.add('active');tt.textContent='Lotes';bb.style.display='inline';loadLotes();}
+  else if(v==='loteDetail'){document.getElementById('viewLoteDetail').classList.add('active');tt.textContent=t||'Lote';bb.style.display='inline';}
+  else if(v==='inia'){document.getElementById('viewINIA').classList.add('active');tt.textContent='INIA / Breedplan';bb.style.display='inline';initINIA();}
+  else if(v==='bajas'){document.getElementById('viewBajas').classList.add('active');tt.textContent='Bajas';bb.style.display='inline';loadBajas('TODOS');}
+  if(window.innerWidth<768){document.getElementById('sidebar').classList.remove('open');document.getElementById('backdrop').classList.remove('show');}
+}
+function goBack(){showView(viewHistory.pop()||'dashboard',null,false);}
+
+// ── DATA ──
+async function loadAnimals(){
+  try{allAnimals=await fetch(`${API}/api/animales?limite=2000`).then(r=>r.json());}catch(e){allAnimals=[];}
+  renderDashboard();renderNavCategories();
+}
+function renderDashboard(){
+  const cats=getCategorias();
+  const t=allAnimals.length;document.getElementById('dashTotal').textContent=t;document.getElementById('navTotal').textContent=t;
+  ['plantel','venta','recria'].forEach(g=>{
+    const grid=document.getElementById(g==='plantel'?'gridPlantel':g==='venta'?'gridVenta':'gridRecria');
+    const grupoCats=cats.filter(c=>c.group===g);
+    const cardsHtml=grupoCats.map(c=>{
+      const n=allAnimals.filter(c.filter).length;
+      if(n===0 && t>0) return '';
+      return `<div class="cat-card" onclick="openCategory('${c.key}')"><div class="cat-dot" style="background:${c.color}"></div><div class="cat-name">${c.label}</div><div class="cat-count">${n}</div></div>`;
+    }).join('');
+    grid.innerHTML=cardsHtml;
+    // Ocultar sección si no tiene cards con datos
+    const hasData=grupoCats.some(c=>allAnimals.filter(c.filter).length>0);
+    grid.previousElementSibling.style.display=(hasData||t===0)?'':'none';
+  });
+}
+function renderNavCategories(){
+  const cats=getCategorias();
+  document.getElementById('navCategories').innerHTML=cats.map(c=>{
+    const n=allAnimals.filter(c.filter).length;if(!n)return'';
+    return `<div class="nav-item" onclick="openCategory('${c.key}')"><span class="icon">${c.icon}</span>${c.label}<span class="badge">${n}</span></div>`;
+  }).join('');
+}
+
+// ── CATEGORY LIST ──
+async function openCategory(key){
+  const cat=CATEGORIES.find(c=>c.key===key);if(!cat)return;
+  const animals=allAnimals.filter(cat.filter);
+  document.getElementById('listTitle').textContent=cat.label;
+  document.getElementById('listCount').textContent=`${animals.length} cabezas`;
+  document.getElementById('bulkBar').classList.remove('show');
+
+  const isV=key.startsWith('vacas')||key==='vaquillonas',isT=key.startsWith('toros'),isR=key.startsWith('recria')||key==='terneros';
+  let pesadasMap={},serviciosMap={},vacaStats={};
+  try{
+    const [ps,ss]=await Promise.all([fetch(`${API}/api/pesadas?limite=5000`).then(r=>r.json()),fetch(`${API}/api/servicios?limite=5000`).then(r=>r.json())]);
+    ps.forEach(p=>{if(!pesadasMap[p.rp])pesadasMap[p.rp]=[];pesadasMap[p.rp].push(p);});
+    ss.forEach(s=>{if(!serviciosMap[s.rp])serviciosMap[s.rp]=[];serviciosMap[s.rp].push(s);});
+  }catch(e){console.error('Error cargando pesadas/servicios:',e);}
+  // Stats de vacas: fetch separado para que no rompa lo demás si falla
+  if(isV){
+    try{vacaStats=await fetch(`${API}/api/stats/vacas`).then(r=>r.json());}
+    catch(e){console.error('Error stats vacas:',e);vacaStats={};}
+  }
+
+  let th='<tr><th></th><th>RP</th><th>Pelo</th><th>Reg</th><th>Edad</th>';
+  if(isV)th+='<th>Madre</th><th>Padre</th><th>PVA</th><th>PPD</th><th>CCP</th><th>Serv</th><th>Crías</th><th>Últ.Tacto</th>';
+  else if(isT)th+='<th>Peso</th><th>CE</th><th>Padre</th><th>Madre</th>';
+  else if(isR)th+='<th>Sexo</th><th>Madre</th><th>Padre</th><th>P.Nac</th><th>P.Dest</th><th>P.Actual</th><th>GDP</th>';
+  th+='</tr>';
+  document.getElementById('listThead').innerHTML=th;
+
+  let tb='';
+  animals.forEach(a=>{
+    const pelo=a.pelo?`<span class="pelo-dot ${a.pelo==='NEGRO'?'pelo-negro':'pelo-colorado'}"></span>${a.pelo}`:'—';
+    const reg=a.registro?`<span class="tag tag-${(a.registro).toLowerCase()}">${a.registro}</span>`:'—';
+    const edad=getEdadTexto(a.fecha_nac);
+    const ps=pesadasMap[a.rp]||[];const ss=serviciosMap[a.rp]||[];
+    const up=ps.length>0?ps[0]:null;const pn=ps.find(p=>p.contexto==='NACIMIENTO');const pd=ps.find(p=>p.contexto==='DESTETE');
+    // Crías = contar desde servicios (ternero_rp + ternero2_rp, no se pierden al vender)
+    const crias=ss.filter(s=>s.ternero_rp && s.fecha_parto).length + ss.filter(s=>s.ternero2_rp && s.fecha_parto).length;
+    // Último servicio: ordenar por temporada DESC, luego por created_at DESC
+    const ssSorted=[...ss].sort((a,b)=>(b.temporada||'').localeCompare(a.temporada||'')||b.id-a.id);
+    const us=ssSorted.length>0?ssSorted[0]:null;
+    const tactoDisplay=us?(us.resultado==='PREÑADA_IATF'?'🤰 IATF':us.resultado==='PREÑADA_TORO'?'🤰 TORO':us.resultado==='VACIA'?'⚪ VACÍA':us.resultado==='PREÑADA'?'🤰':us.resultado||'pend.'):'—';
+    const tactoColor=us?(us.resultado==='VACIA'?'var(--red)':us.resultado?.startsWith('PREÑADA')?'var(--green)':'var(--text3)'):'var(--text3)';
+
+    let r=`<tr onclick="openAnimalDetail('${a.rp}')">`;
+    r+=`<td onclick="event.stopPropagation()"><input type="checkbox" class="sel-check" data-rp="${a.rp}" onchange="updateBulk()" style="accent-color:var(--accent)"></td>`;
+    r+=`<td style="font-weight:600;color:var(--text)">${a.rp}</td><td>${pelo}</td><td>${reg}</td><td>${edad}</td>`;
+    if(isV){
+      const vs=vacaStats[a.rp]||{};
+      r+=`<td style="font-size:11px">${a.madre_rp||'—'}</td><td style="font-size:11px">${a.padre_rp||'—'}</td>`;
+      r+=`<td title="Peso Vaca Adulta (promedio pesadas)">${vs.pva?vs.pva.toFixed(0)+'kg':'—'}</td>`;
+      r+=`<td title="Peso Promedio Destete crías (${vs.n_crias_destete||0} con dato)">${vs.peso_dest_crias?vs.peso_dest_crias.toFixed(0)+'kg':'—'}</td>`;
+      r+=`<td title="Condición Corporal Promedio">${vs.cc_prom?vs.cc_prom.toFixed(1):'—'}</td>`;
+      r+=`<td>${ss.length||'—'}</td><td>${crias}</td>`;
+      r+=`<td style="font-weight:600;color:${tactoColor};font-size:11px">${tactoDisplay}${us&&us.temporada?' <span style="font-weight:400;color:var(--text3)">('+us.temporada+')</span>':''}</td>`;
+    }else if(isT){
+      r+=`<td>${up?up.peso+'kg':'—'}</td><td>—</td><td style="font-size:11px">${a.padre_rp||'—'}</td><td style="font-size:11px">${a.madre_rp||'—'}</td>`;
+    }else if(isR){
+      r+=`<td>${a.sexo==='MACHO'?'♂':'♀'}</td><td style="font-size:11px">${a.madre_rp||'—'}</td><td style="font-size:11px">${a.padre_rp||'—'}</td>`;
+      r+=`<td>${pn?pn.peso+'kg':'—'}</td><td>${pd?pd.peso+'kg':'—'}</td><td>${up?up.peso+'kg':'—'}</td>`;
+      r+=`<td>${up?.gdp?(up.gdp*1000).toFixed(0)+'g/d':'—'}</td>`;
+    }
+    r+='</tr>';tb+=r;
+  });
+  document.getElementById('listTbody').innerHTML=tb||'<tr><td colspan="12" style="text-align:center;padding:20px;color:var(--text3)">Sin animales</td></tr>';
+  showView('list',cat.label);
+}
+
+// ── BULK ACTIONS ──
+function getSelected(){return [...document.querySelectorAll('.sel-check:checked')].map(c=>c.dataset.rp);}
+function updateBulk(){
+  const sel=getSelected();
+  const bar=document.getElementById('bulkBar');
+  if(sel.length>0){bar.classList.add('show');document.getElementById('bulkCount').textContent=`${sel.length} seleccionados`;}
+  else bar.classList.remove('show');
+}
+function selectAll(){document.querySelectorAll('.sel-check').forEach(c=>c.checked=true);updateBulk();}
+function selectNone(){document.querySelectorAll('.sel-check').forEach(c=>c.checked=false);updateBulk();}
+
+function bulkSanidad(){
+  const sel=getSelected();if(!sel.length)return;
+  const prod=prompt(`💉 Tratamiento para ${sel.length} animales:\n(ej: Ivermectina, Aftosa, etc.)`);
+  if(!prod)return;
+  showView('chat');
+  document.getElementById('chatInput').value=`Registrar ${prod} para los RP: ${sel.join(', ')}`;
+  sendMessage();
+}
+async function bulkBaja(){
+  const sel=getSelected();if(!sel.length)return;
+  const motivo=prompt(`📤 Motivo de baja para ${sel.length} animales:\n\nEscribí VENTA o MUERTE`);
+  if(!motivo)return;
+  if(!['VENTA','MUERTE'].includes(motivo.toUpperCase())){alert('Motivo debe ser VENTA o MUERTE');return;}
+  const fecha=prompt('Fecha de baja (YYYY-MM-DD):',new Date().toISOString().slice(0,10));
+  if(!fecha)return;
+  if(!confirm(`¿Confirmar baja de ${sel.length} animales por ${motivo.toUpperCase()}?`))return;
+  try{
+    const r=await fetch(`${API}/api/animales/baja`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rps:sel,motivo:motivo.toUpperCase(),fecha})});
+    const d=await r.json();
+    alert(d.mensaje);
+    selectNone();loadAnimals();
+  }catch(e){alert('Error: '+e.message);}
+}
+async function bulkAsignarLote(){
+  const sel=getSelected();if(!sel.length)return;
+  // Cargar lotes disponibles
+  let lotes=[];
+  try{lotes=await fetch(`${API}/api/lotes`).then(r=>r.json());}catch(e){}
+  if(!lotes.length){
+    const crear=confirm(`No hay lotes creados.\n¿Querés crear uno nuevo para estos ${sel.length} animales?`);
+    if(!crear)return;
+    const nombre=prompt('Nombre del lote:');if(!nombre)return;
+    const potrero=prompt('Potrero / ubicación (opcional):')||'';
+    try{
+      const r=await fetch(`${API}/api/lotes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre,potrero})});
+      const d=await r.json();if(d.error){alert(d.error);return;}
+      lotes=await fetch(`${API}/api/lotes`).then(r=>r.json());
+    }catch(e){alert('Error: '+e.message);return;}
+  }
+  // Mostrar selector de lote
+  const opciones=lotes.map((l,i)=>`${i+1}. ${l.nombre} (${l.cantidad} cab.)${l.potrero?' — '+l.potrero:''}`).join('\n');
+  const eleccion=prompt(`🏷️ Asignar ${sel.length} animales a:\n\n${opciones}\n\n0. Crear lote nuevo\n\nElegí el número:`);
+  if(eleccion===null)return;
+  let loteId;
+  if(eleccion==='0'){
+    const nombre=prompt('Nombre del lote nuevo:');if(!nombre)return;
+    const potrero=prompt('Potrero (opcional):')||'';
+    try{
+      const r=await fetch(`${API}/api/lotes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre,potrero})});
+      const d=await r.json();if(d.error){alert(d.error);return;}
+      loteId=d.id;
+    }catch(e){alert('Error: '+e.message);return;}
+  } else {
+    const idx=parseInt(eleccion)-1;
+    if(isNaN(idx)||idx<0||idx>=lotes.length){alert('Opción inválida');return;}
+    loteId=lotes[idx].id;
+  }
+  try{
+    const r=await fetch(`${API}/api/lotes/${loteId}/animales`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rps:sel})});
+    const d=await r.json();alert(d.mensaje);selectNone();loadLotes();
+  }catch(e){alert('Error: '+e.message);}
+}
+
+// ── ANIMAL DETAIL ──
+let detailAnimalId=null;
+async function openAnimalDetail(rp){
+  const ov=document.getElementById('detailOverlay'),card=document.getElementById('detailCard');
+  card.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3)">Cargando...</div>';ov.classList.add('show');
+  try{
+    const d=await fetch(`${API}/api/animales/${encodeURIComponent(rp)}`).then(r=>r.json());
+    if(d.error){card.innerHTML=`<p style="color:var(--red)">❌ ${d.error}</p>`;return;}
+    detailAnimalId=d.id;const edad=getEdadTexto(d.fecha_nac);
+    let h=`<button class="detail-close" onclick="closeDetail()">✕</button>`;
+    h+=`<div style="margin-bottom:14px"><div style="font-size:18px;font-weight:700;color:var(--accent)">RP ${d.rp}</div><div style="font-size:12px;color:var(--text3)">${d.chip||'Sin chip'} · ${d.estado}</div></div>`;
+    // Editable
+    h+=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+      <div><span class="ed-label">RP</span><input class="ed-input" id="ed_rp" value="${d.rp||''}"></div>
+      <div><span class="ed-label">CHIP</span><input class="ed-input" id="ed_chip" value="${d.chip||''}"></div>
+      <div><span class="ed-label">Fecha Nac</span><input type="date" class="ed-input" id="ed_fnac" value="${d.fecha_nac||''}"></div></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+      <div><span class="ed-label">Sexo</span><select class="ed-input" id="ed_sexo"><option ${d.sexo==='MACHO'?'selected':''}>MACHO</option><option ${d.sexo==='HEMBRA'?'selected':''}>HEMBRA</option></select></div>
+      <div><span class="ed-label">Pelo</span><select class="ed-input" id="ed_pelo"><option value="">—</option><option ${d.pelo==='NEGRO'?'selected':''}>NEGRO</option><option ${d.pelo==='COLORADO'?'selected':''}>COLORADO</option></select></div>
+      <div><span class="ed-label">Registro</span><select class="ed-input" id="ed_reg"><option value="">—</option><option ${d.registro==='PP'?'selected':''}>PP</option><option ${d.registro==='SA'?'selected':''}>SA</option><option ${d.registro==='GENERAL'?'selected':''}>GENERAL</option></select></div>
+      <div><span class="ed-label">Categoría</span><select class="ed-input" id="ed_cat"><option ${d.categoria==='TERNERO'?'selected':''}>TERNERO</option><option ${d.categoria==='RECRIA'?'selected':''}>RECRIA</option><option ${d.categoria==='VAQUILLONA'?'selected':''}>VAQUILLONA</option><option ${d.categoria==='VACA'?'selected':''}>VACA</option><option ${d.categoria==='NOVILLO'?'selected':''}>NOVILLO</option><option ${d.categoria==='TORO'?'selected':''}>TORO</option></select></div></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+      <div><span class="ed-label">Madre RP</span><input class="ed-input" id="ed_madre" value="${d.madre_rp||''}"></div>
+      <div><span class="ed-label">Padre RP</span><input class="ed-input" id="ed_padre" value="${d.padre_rp||''}"></div>
+      <div><span class="ed-label">Destino</span><select class="ed-input" id="ed_dest"><option ${d.destino==='PLANTEL'?'selected':''}>PLANTEL</option><option ${d.destino==='VENTA'?'selected':''}>VENTA</option></select></div></div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center">
+      <button onclick="saveEdit()" style="background:var(--accent);color:#fff;border:none;padding:6px 16px;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer">💾 Guardar</button>
+      <span id="ed_msg" style="font-size:12px;color:var(--green)"></span></div>`;
+    h+=`<div style="font-size:11px;color:var(--text3);margin-bottom:14px">📅 ${edad} ${d.notas?'· '+d.notas:''}</div>`;
+    if(d.lote) h+=`<div style="margin-bottom:12px;padding:6px 10px;background:var(--accent-dim);border-radius:6px;font-size:11px;color:var(--accent);font-weight:500">📍 Lote: ${d.lote.nombre}${d.lote.potrero?' — '+d.lote.potrero:''}</div>`;
+
+    // Pesadas
+    if(d.pesadas?.length){h+=`<div class="detail-section"><h3>⚖️ Pesadas</h3><table class="detail-table"><tr><th>Fecha</th><th>Peso</th><th>Contexto</th><th>GDP</th><th></th></tr>`;
+      d.pesadas.forEach(p=>{h+=`<tr><td>${p.fecha}</td><td>${p.peso}kg</td><td>${p.contexto}</td><td>${p.gdp?(p.gdp*1000).toFixed(0)+'g/d':'—'}</td><td><button onclick="deleteRecord('pesadas',${p.id},'${d.rp}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px">✕</button></td></tr>`;});h+='</table></div>';}
+    // Mediciones
+    if(d.mediciones?.length){h+=`<div class="detail-section"><h3>📐 Mediciones</h3><table class="detail-table"><tr><th>Fecha</th><th>Tipo</th><th>Valor</th><th></th></tr>`;
+      d.mediciones.forEach(m=>{h+=`<tr><td>${m.fecha}</td><td>${m.tipo}</td><td>${m.valor||m.valor_texto||'—'}</td><td><button onclick="deleteRecord('mediciones',${m.id},'${d.rp}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px">✕</button></td></tr>`;});h+='</table></div>';}
+    // Servicios
+    if(d.servicios?.length){h+=`<div class="detail-section"><h3>🔄 Servicios</h3><table class="detail-table"><tr><th>Temp</th><th>Tipo</th><th>Semen IATF</th><th>Toro Repaso</th><th>Resultado</th><th>Cría</th><th></th></tr>`;
+      d.servicios.forEach(s=>{
+        let criaRP = s.ternero_rp || '—';
+        if(criaRP==='—' && d.hijos?.length && s.temporada){
+          const anioNac = parseInt(s.temporada) + 1;
+          const hijo = d.hijos.find(h2=>h2.fecha_nac && h2.fecha_nac.startsWith(String(anioNac)));
+          if(hijo) criaRP = hijo.rp;
+        }
+        let criaDisplay = criaRP;
+        if(s.ternero2_rp) criaDisplay += ` + 👯${s.ternero2_rp}`;
+        h+=`<tr><td>${s.temporada||'—'}</td><td>${s.tipo_servicio||'—'}</td><td>${s.semen_iatf||'—'}</td><td>${s.toro_natural||'—'}</td><td style="color:${s.resultado==='VACIA'?'var(--red)':s.resultado?.startsWith('PREÑADA')?'var(--green)':'var(--text3)'};font-weight:600">${s.resultado==='PREÑADA_IATF'?'🤰 IATF':s.resultado==='PREÑADA_TORO'?'🤰 TORO':s.resultado==='VACIA'?'⚪ VACÍA':s.resultado||'pend.'}</td><td style="font-weight:${criaRP!=='—'?'600':'400'}">${criaDisplay}</td><td><button onclick="editServicio(${s.id},'${d.rp}')" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px;margin-right:4px">✎</button><button onclick="deleteRecord('servicios',${s.id},'${d.rp}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px">✕</button></td></tr>`;
+      });h+='</table></div>';}
+    // Sanidad
+    if(d.sanidad?.length){h+=`<div class="detail-section"><h3>💉 Sanidad</h3><table class="detail-table"><tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th></th></tr>`;
+      d.sanidad.slice(0,15).forEach(s=>{h+=`<tr><td>${s.fecha}</td><td>${s.tipo}</td><td>${s.producto||'—'}</td><td><button onclick="deleteRecord('sanidad',${s.id},'${d.rp}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px">✕</button></td></tr>`;});
+      if(d.sanidad.length>15)h+=`<tr><td colspan="4" style="color:var(--text3)">...y ${d.sanidad.length-15} más</td></tr>`;h+='</table></div>';}
+    // Hijos
+    if(d.hijos?.length){h+=`<div class="detail-section"><h3>👶 Crías como madre (${d.hijos.length})</h3><table class="detail-table"><tr><th>RP</th><th>Sexo</th><th>Pelo</th><th>Nac</th><th>Padre</th><th>Mellizo</th></tr>`;
+      d.hijos.forEach(c=>{h+=`<tr style="cursor:pointer" onclick="closeDetail();setTimeout(()=>openAnimalDetail('${c.rp}'),200)"><td style="font-weight:600">${c.rp}</td><td>${c.sexo}</td><td>${c.pelo||'—'}</td><td>${c.fecha_nac||'—'}</td><td>${c.padre_rp||'—'}</td><td>${c.mellizo_de?'👯 '+c.mellizo_de:'—'}</td></tr>`;});h+='</table></div>';}
+    // Hijos como padre (para toros)
+    if(d.hijos_padre?.length){h+=`<div class="detail-section"><h3>🐂 Progenie como padre (${d.hijos_padre.length})</h3><table class="detail-table"><tr><th>RP</th><th>Sexo</th><th>Pelo</th><th>Nac</th><th>Madre</th><th>Cat</th></tr>`;
+      d.hijos_padre.forEach(c=>{h+=`<tr style="cursor:pointer" onclick="closeDetail();setTimeout(()=>openAnimalDetail('${c.rp}'),200)"><td style="font-weight:600">${c.rp}</td><td>${c.sexo}</td><td>${c.pelo||'—'}</td><td>${c.fecha_nac||'—'}</td><td>${c.madre_rp||'—'}</td><td>${c.categoria||'—'}</td></tr>`;});h+='</table></div>';}
+    card.innerHTML=h;
+  }catch(e){card.innerHTML=`<button class="detail-close" onclick="closeDetail()">✕</button><p style="color:var(--red)">❌ ${e.message}</p>`;}
+}
+async function deleteRecord(tipo, id, rp) {
+  if (!confirm(`¿Eliminar este registro de ${tipo}?`)) return;
+  try {
+    await fetch(`${API}/api/${tipo}/${id}`, { method: 'DELETE' });
+    openAnimalDetail(rp); // refresh
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+async function saveEdit(){
+  if(!detailAnimalId)return;
+  try{
+    await fetch(`${API}/api/animales/${detailAnimalId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      rp:document.getElementById('ed_rp').value.trim(),chip:document.getElementById('ed_chip').value.trim()||null,
+      fecha_nac:document.getElementById('ed_fnac').value||null,sexo:document.getElementById('ed_sexo').value,
+      pelo:document.getElementById('ed_pelo').value||null,registro:document.getElementById('ed_reg').value||null,
+      categoria:document.getElementById('ed_cat').value,madre_rp:document.getElementById('ed_madre').value.trim()||null,
+      padre_rp:document.getElementById('ed_padre').value.trim()||null,destino:document.getElementById('ed_dest').value,
+    })});
+    document.getElementById('ed_msg').textContent='✅ Guardado';setTimeout(()=>document.getElementById('ed_msg').textContent='',2000);loadAnimals();
+  }catch(e){document.getElementById('ed_msg').textContent='❌ Error';}
+}
+function closeDetail(){document.getElementById('detailOverlay').classList.remove('show');}
+document.getElementById('detailOverlay').addEventListener('click',e=>{if(e.target===document.getElementById('detailOverlay'))closeDetail();});
+
+// ── CHAT ──
+let sending=false;
+function addMsg(t,type){const d=document.createElement('div');d.className=`msg ${type}`;d.textContent=t;document.getElementById('chatMessages').appendChild(d);const c=document.getElementById('chatMessages');setTimeout(()=>c.scrollTop=c.scrollHeight,50);}
+async function sendMessage(){
+  const inp=document.getElementById('chatInput'),t=inp.value.trim();if(!t||sending)return;
+  addMsg(t,'user');inp.value='';sending=true;
+  const ti=document.createElement('div');ti.className='msg bot';ti.id='typing';ti.innerHTML='<div class="typing"><span></span><span></span><span></span></div>';document.getElementById('chatMessages').appendChild(ti);
+  try{const r=await fetch(`${API}/webhook-interno?campo=${campoActual}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({Body:t})});const d=await r.json();document.getElementById('typing')?.remove();addMsg(d.respuesta||'Sin respuesta','bot');loadAnimals();}
+  catch(e){document.getElementById('typing')?.remove();addMsg('❌ Error de conexión.','bot');}
+  sending=false;inp.focus();
+}
+document.getElementById('chatInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();sendMessage();}});
+
+// ── MODALS ──
+function openRegister(type){
+  const ov=document.getElementById('modalOverlay'),ct=document.getElementById('modalContent');
+  if(window.innerWidth<768)toggleSidebar();
+  const M={
+    animal:`<h2>➕ Nuevo Animal</h2><div class="form-row"><div><label>RP *</label><input id="r_rp"></div><div><label>CHIP</label><input id="r_chip"></div></div><div class="form-row3"><div><label>Sexo *</label><select id="r_sexo"><option>MACHO</option><option>HEMBRA</option></select></div><div><label>Pelo</label><select id="r_pelo"><option value="">—</option><option>NEGRO</option><option>COLORADO</option></select></div><div><label>Registro</label><select id="r_reg"><option value="">—</option><option>PP</option><option>SA</option><option>GENERAL</option></select></div></div><div class="form-row3"><div><label>Categoría</label><select id="r_cat"><option>TERNERO</option><option>RECRIA</option><option>VAQUILLONA</option><option>VACA</option><option>NOVILLO</option><option>TORO</option></select></div><div><label>Destino</label><select id="r_dest"><option>PLANTEL</option><option>VENTA</option></select></div><div><label>Nacimiento</label><input type="date" id="r_fnac"></div></div><div class="form-row"><div><label>Madre RP</label><input id="r_madre"></div><div><label>Padre RP</label><input id="r_padre"></div></div><div class="modal-actions"><button class="modal-btn secondary" onclick="closeModal()">Cancelar</button><button class="modal-btn primary" onclick="submitReg('animal')">Registrar</button></div>`,
+    pesada:`<h2>⚖️ Pesada</h2><div class="form-row"><div><label>RP *</label><input id="r_rp2"></div><div><label>Peso (kg) *</label><input type="number" id="r_peso" step="0.1"></div></div><label>Contexto</label><select id="r_ctx"><option>DESARROLLO</option><option>NACIMIENTO</option><option>DESTETE</option><option>AÑO</option><option>18MESES</option><option>ADULTA</option></select><div class="modal-actions"><button class="modal-btn secondary" onclick="closeModal()">Cancelar</button><button class="modal-btn primary" onclick="submitReg('pesada')">Registrar</button></div>`,
+    sanidad:`<h2>💉 Sanidad</h2><div class="form-row"><div><label>RP *</label><input id="r_rp3"></div><div><label>Tipo</label><select id="r_stipo"><option>TRATAMIENTO</option><option>VACUNA</option><option>DESPARASITACION</option></select></div></div><div class="form-row"><div><label>Producto</label><input id="r_prod"></div><div><label>Dosis</label><input id="r_dosis"></div></div><div class="modal-actions"><button class="modal-btn secondary" onclick="closeModal()">Cancelar</button><button class="modal-btn primary" onclick="submitReg('sanidad')">Registrar</button></div>`,
+    medicion:`<h2>📐 Medición</h2><div class="form-row3"><div><label>RP *</label><input id="r_rp4"></div><div><label>Tipo</label><select id="r_mtipo"><option>CE</option><option>CC</option><option>ALTURA</option><option>FRAME</option><option>DOCILIDAD</option></select></div><div><label>Valor *</label><input type="number" id="r_mval" step="0.1"></div></div><div class="modal-actions"><button class="modal-btn secondary" onclick="closeModal()">Cancelar</button><button class="modal-btn primary" onclick="submitReg('medicion')">Registrar</button></div>`,
+    servicio:`<h2>🔄 Registrar Servicio</h2><div class="form-row"><div><label>RP Vaca *</label><input id="r_rp5"></div><div><label>Temporada</label><input id="r_temp" value="2025"></div></div><div class="form-row"><div><label>Toro IATF (semen)</label><input id="r_toroiatf" placeholder="Ej: LUCUMA"></div><div><label>Fecha IATF</label><input type="date" id="r_fechaiatf"></div></div><div class="form-row"><div><label>Toro Repaso (natural)</label><input id="r_tororep" placeholder="Ej: CENTINELA"></div><div><label>Fecha ingreso toro</label><input type="date" id="r_fechatoro"></div></div><div class="form-row"><div><label>CC pre servicio</label><input type="number" id="r_ccpre" step="0.5" min="1" max="10"></div><div><label>Tacto pre</label><input id="r_tactopre"></div></div><div class="modal-actions"><button class="modal-btn secondary" onclick="closeModal()">Cancelar</button><button class="modal-btn primary" onclick="submitReg('servicio')">Registrar</button></div>`,
+    gallagher:`<h2>📡 Cargar CSV Gallagher</h2><div style="font-size:12px;color:var(--text3);margin-bottom:12px">Seleccioná el CSV del bastón. Detecta automáticamente: peso, GDP, CE, altura, CC, color, preñez, toro, vacunas, madre, padre.</div><input type="file" id="gallagherFile" accept=".csv" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:8px;margin-bottom:10px"><div id="gPreview" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;max-height:160px;overflow-y:auto;font-size:11px;color:var(--text3)"></div><div id="gResult" style="display:none;background:var(--surface2);border:1px solid var(--accent);border-radius:8px;padding:12px;font-size:12px;color:var(--accent);white-space:pre-wrap"></div><div style="margin:10px 0"><label style="font-size:12px;color:var(--text2);cursor:pointer"><input type="checkbox" id="gAutoCrear" style="margin-right:6px;accent-color:var(--accent)">Crear animales nuevos si no existen</label></div><div class="modal-actions"><button class="modal-btn secondary" onclick="closeModal()">Cancelar</button><button class="modal-btn primary" id="gBtn" onclick="uploadGallagher()" disabled>Procesar</button></div>`,
+    servicios_csv:`<h2>📋 Cargar Servicios CSV</h2><div style="font-size:12px;color:var(--text3);margin-bottom:12px">CSV con columnas: rp, temporada, tipo_servicio, semen_iatf, fecha_iatf, toro_natural, fecha_ingreso_toro, cc_pre, resultado</div><input type="file" id="serviciosCsvFile" accept=".csv" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:8px;margin-bottom:10px"><div id="scPreview" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;font-size:11px;color:var(--text3)"></div><div id="scResult" style="display:none;background:var(--surface2);border:1px solid var(--accent);border-radius:8px;padding:12px;font-size:12px;color:var(--accent);white-space:pre-wrap"></div><div class="modal-actions"><button class="modal-btn secondary" onclick="closeModal()">Cancelar</button><button class="modal-btn primary" id="scBtn" onclick="uploadServiciosCSV()" disabled>Procesar</button></div>`,
+  };
+  ct.innerHTML=M[type]||'';ov.classList.add('show');
+  if(type==='gallagher')setTimeout(()=>{const f=document.getElementById('gallagherFile');if(f)f.addEventListener('change',onGallagherFile);},100);
+  if(type==='servicios_csv')setTimeout(()=>{const f=document.getElementById('serviciosCsvFile');if(f)f.addEventListener('change',onServiciosCsvFile);},100);
+}
+function closeModal(){document.getElementById('modalOverlay').classList.remove('show');}
+document.getElementById('modalOverlay').addEventListener('click',e=>{if(e.target===document.getElementById('modalOverlay'))closeModal();});
+
+async function submitReg(type){
+  let msg='';
+  if(type==='animal'){const rp=document.getElementById('r_rp').value.trim();if(!rp)return alert('RP obligatorio');msg=`Registrar animal RP ${rp}, chip ${document.getElementById('r_chip').value||'sin chip'}, ${document.getElementById('r_sexo').value}, pelo ${document.getElementById('r_pelo').value||'no definido'}, registro ${document.getElementById('r_reg').value||'sin registro'}, categoría ${document.getElementById('r_cat').value}, nacimiento ${document.getElementById('r_fnac').value||'sin fecha'}, madre ${document.getElementById('r_madre').value||'desconocida'}, padre ${document.getElementById('r_padre').value||'desconocido'}`;}
+  else if(type==='pesada'){const rp=document.getElementById('r_rp2').value.trim(),p=document.getElementById('r_peso').value;if(!rp||!p)return alert('RP y Peso obligatorios');msg=`Pesé el RP ${rp} a ${p} kg, contexto ${document.getElementById('r_ctx').value}`;}
+  else if(type==='sanidad'){const rp=document.getElementById('r_rp3').value.trim();if(!rp)return alert('RP obligatorio');msg=`Registrar ${document.getElementById('r_stipo').value} RP ${rp}, producto ${document.getElementById('r_prod').value||'—'}, dosis ${document.getElementById('r_dosis').value||'—'}`;}
+  else if(type==='medicion'){const rp=document.getElementById('r_rp4').value.trim(),v=document.getElementById('r_mval').value;if(!rp||!v)return alert('RP y Valor obligatorios');msg=`Medir ${document.getElementById('r_mtipo').value} del RP ${rp}: ${v}`;}
+  else if(type==='servicio'){const rp=document.getElementById('r_rp5').value.trim();if(!rp)return alert('RP obligatorio');msg=`Registrar servicio RP ${rp}, temporada ${document.getElementById('r_temp').value}, IATF ${document.getElementById('r_toroiatf').value||'sin IATF'} fecha ${document.getElementById('r_fechaiatf').value||'sin fecha'}, toro repaso ${document.getElementById('r_tororep').value||'sin repaso'} desde ${document.getElementById('r_fechatoro').value||'sin fecha'}, CC ${document.getElementById('r_ccpre').value||'sin dato'}`;}
+  closeModal();showView('chat');document.getElementById('chatInput').value=msg;sendMessage();
+}
+
+// ── GALLAGHER ──
+let gParsed=null;
+const COL_MAP={'número de etiqueta':'rp','id electrónico':'chip','fecha':'fecha','time':'hora','grupo de separación':'grupo','notas':'notas','peso vivo (kg)':'peso','ganancia diaria promedio (kg/d)':'gdp_promedio','ganancia diaria general (kg/d)':'gdp_general','colour':'color','color':'color','c.e.':'ce','altura':'altura','cartel':'cartel','condición':'condicion','condicion':'condicion','raza':'raza','prenez':'prenez','preñez':'prenez','progenitor hembra vaca':'madre','progenitor (macho)':'padre','padre número de etiqueta':'padre','padre id electrónico':'padre_chip','fecha de nacimiento':'fecha_nac','sexo':'sexo','estado':'estado','tacto pre':'tacto_pre','toro prenez':'toro_prenez','toro preñez':'toro_prenez','vacuna':'vacuna','lactancia':'lactancia','pelo':'pelo','rp':'rp'};
+
+function parseCSV(t){const l=t.split('\n').filter(l=>l.trim());if(l.length<2)return[];const h=l[0].split(',').map(s=>s.trim().replace(/"/g,''));return l.slice(1).map(line=>{const v=[];let c='',q=false;for(const ch of line){if(ch==='"')q=!q;else if(ch===','&&!q){v.push(c.trim());c='';}else c+=ch;}v.push(c.trim());const o={};h.forEach((hd,i)=>o[hd]=v[i]||'');return o;});}
+function mapRow(r){const m={};for(const[c,v]of Object.entries(r)){const k=COL_MAP[c.toLowerCase().trim()];if(k&&v!==undefined&&v!=='')m[k]=v;}return m;}
+
+function onGallagherFile(e){
+  const f=e.target.files[0];if(!f)return;
+  const reader=new FileReader();reader.onload=function(ev){
+    const rows=parseCSV(ev.target.result).map(mapRow);gParsed={registros:rows,nombre_sesion:f.name.replace('.csv','')};
+    const p=document.getElementById('gPreview');p.style.display='block';
+    const cP=rows.filter(r=>r.peso&&r.peso!=='').length,cG=rows.filter(r=>r.gdp_promedio||r.gdp_general).length,cE=rows.filter(r=>r.ce).length,cPr=rows.filter(r=>r.prenez).length,cPa=rows.filter(r=>r.padre).length,cC=rows.filter(r=>r.color).length;
+    let h=`<strong>${f.name}</strong> — ${rows.length} lecturas<br>`;
+    if(cP)h+=`⚖️ ${cP} peso · `;if(cG)h+=`📈 ${cG} GDP · `;if(cE)h+=`📐 ${cE} CE · `;if(cPr)h+=`🤰 ${cPr} preñez · `;if(cPa)h+=`🐂 ${cPa} padre · `;if(cC)h+=`🎨 ${cC} color · `;
+    p.innerHTML=h;document.getElementById('gBtn').disabled=false;document.getElementById('gResult').style.display='none';
+  };reader.readAsText(f);
+}
+
+async function uploadGallagher(){
+  if(!gParsed)return;const btn=document.getElementById('gBtn');btn.disabled=true;btn.textContent='Procesando...';
+  const res=document.getElementById('gResult');res.style.display='block';res.style.color='var(--accent)';res.textContent='Enviando...';
+  try{
+    const r=await fetch(`${API}/api/importar/gallagher`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...gParsed,auto_crear:document.getElementById('gAutoCrear')?.checked||false})});
+    const d=await r.json();res.textContent=d.mensaje||JSON.stringify(d);
+    if(d.resumen?.no_encontrados?.length>0&&!document.getElementById('gAutoCrear')?.checked){res.textContent+='\n\n→ Marcá "Crear animales nuevos" y volvé a procesar si querés crearlos.';}
+    loadAnimals();
+  }catch(e){res.style.color='var(--red)';res.textContent='❌ '+e.message;}
+  btn.textContent='Procesar';btn.disabled=false;
+}
+
+loadAnimals();
+
+// ── SEARCH ──
+async function recalcular(){
+  try{
+    const r=await fetch(`${API}/api/recalcular`,{method:'POST'});
+    const d=await r.json();
+    alert(d.mensaje||'Recalculado');
+    loadAnimals();
+  }catch(e){alert('Error: '+e.message);}
+}
+
+let searchTimeout=null;
+function doSearch(q){
+  clearTimeout(searchTimeout);
+  const sr=document.getElementById('searchResults');
+  if(!q||q.length<1){sr.style.display='none';return;}
+  searchTimeout=setTimeout(async()=>{
+    try{
+      const res=await fetch(`${API}/api/animales?buscar=${encodeURIComponent(q)}`).then(r=>r.json());
+      if(!res.length){sr.innerHTML='<div style="padding:10px 12px;color:var(--text3);font-size:12px">Sin resultados</div>';sr.style.display='block';return;}
+      sr.style.display='block';
+      sr.innerHTML=res.slice(0,10).map(a=>`<div style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px" onclick="document.getElementById('searchInput').value='';document.getElementById('searchResults').style.display='none';openAnimalDetail('${a.rp}')"><strong>${a.rp}</strong> <span style="color:var(--text3)">${a.chip||''} · ${a.sexo} ${a.pelo||''} · ${a.categoria}</span></div>`).join('');
+    }catch(e){sr.style.display='none';}
+  },300);
+}
+document.addEventListener('click',e=>{if(!e.target.closest('#searchInput')&&!e.target.closest('#searchResults'))document.getElementById('searchResults').style.display='none';});
+
+// ── SERVICIO MASIVO ──
+async function bulkServicio(){
+  const sel=getSelected();if(!sel.length)return;
+  const ov=document.getElementById('modalOverlay'),ct=document.getElementById('modalContent');
+  ct.innerHTML=`<h2>🔄 Servicio Masivo — ${sel.length} vacas</h2>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Se va a registrar servicio para: ${sel.join(', ')}</div>
+    <div class="form-row"><div><label>Temporada *</label><input class="ed-input" id="bs_temp" value="${new Date().getFullYear()}"></div>
+    <div><label>Tipo</label><select class="ed-input" id="bs_tipo"><option>IATF</option><option>NATURAL</option></select></div></div>
+    <div class="form-row"><div><label>Toro IATF (semen)</label><input class="ed-input" id="bs_semen" placeholder="Ej: LUCUMA"></div>
+    <div><label>Fecha IATF</label><input type="date" class="ed-input" id="bs_fiatf"></div></div>
+    <div class="form-row"><div><label>Toro Repaso</label><input class="ed-input" id="bs_toro" placeholder="Ej: ADE277"></div>
+    <div><label>Fecha ingreso toro</label><input type="date" class="ed-input" id="bs_ftoro"></div></div>
+    <div class="form-row"><div><label>CC pre servicio</label><input type="number" class="ed-input" id="bs_cc" step="0.5" min="1" max="10"></div><div></div></div>
+    <div id="bs_result" style="display:none;margin-top:10px;padding:10px;background:var(--surface2);border:1px solid var(--accent);border-radius:8px;font-size:12px;white-space:pre-wrap"></div>
+    <div class="modal-actions"><button class="modal-btn secondary" onclick="closeModal()">Cancelar</button>
+    <button class="modal-btn primary" id="bs_btn" onclick="submitBulkServicio()">Registrar ${sel.length} servicios</button></div>`;
+  ov.classList.add('show');
+  window._bulkServicioRps=sel;
+}
+async function submitBulkServicio(){
+  const rps=window._bulkServicioRps;if(!rps||!rps.length)return;
+  const btn=document.getElementById('bs_btn');btn.disabled=true;btn.textContent='Procesando...';
+  const res=document.getElementById('bs_result');res.style.display='block';res.textContent='Registrando...';
+  try{
+    const r=await fetch(`${API}/api/servicios/masivo`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      rps,
+      temporada:document.getElementById('bs_temp').value,
+      tipo_servicio:document.getElementById('bs_tipo').value,
+      semen_iatf:document.getElementById('bs_semen').value||null,
+      fecha_iatf:document.getElementById('bs_fiatf').value||null,
+      toro_natural:document.getElementById('bs_toro').value||null,
+      fecha_ingreso_toro:document.getElementById('bs_ftoro').value||null,
+      cc_pre:document.getElementById('bs_cc').value?parseFloat(document.getElementById('bs_cc').value):null
+    })});
+    const d=await r.json();res.textContent=d.mensaje||JSON.stringify(d);
+    selectNone();loadAnimals();
+  }catch(e){res.style.color='var(--red)';res.textContent='❌ '+e.message;}
+  btn.textContent='Listo';btn.disabled=false;
+}
+
+// ── LOTES ──
+let allLotes=[], currentLoteId=null;
+async function loadLotes(){
+  try{allLotes=await fetch(`${API}/api/lotes`).then(r=>r.json());}catch(e){allLotes=[];}
+  document.getElementById('navLotes').textContent=allLotes.length;
+  renderLotes();
+}
+function renderLotes(){
+  const g=document.getElementById('lotesGrid');if(!g)return;
+  if(!allLotes.length){g.innerHTML='<div style="color:var(--text3);font-size:13px;padding:20px">No hay lotes creados. Usá "+ Nuevo Lote" para crear uno.</div>';return;}
+  g.innerHTML=allLotes.map(l=>`<div class="cat-card" onclick="openLoteDetail(${l.id})" style="cursor:pointer">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font-size:20px">🏷️</span><span style="font-size:14px;font-weight:600">${l.nombre}</span></div>
+    <div class="cat-count">${l.cantidad}</div><div class="cat-sub">cabezas</div>
+    ${l.potrero?`<div style="font-size:10px;color:var(--text3);margin-top:4px">📍 ${l.potrero}</div>`:''}
+    ${l.descripcion?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${l.descripcion}</div>`:''}
+  </div>`).join('');
+}
+function openCrearLote(){
+  const nombre=prompt('Nombre del lote (ej: RECRIA MACHOS 2025):');if(!nombre)return;
+  const potrero=prompt('Potrero / ubicación (opcional):')||'';
+  const desc=prompt('Descripción (opcional):')||'';
+  fetch(`${API}/api/lotes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre,potrero,descripcion:desc})})
+    .then(r=>r.json()).then(d=>{alert(d.mensaje||d.error);loadLotes();}).catch(e=>alert('Error: '+e.message));
+}
+async function openLoteDetail(id){
+  currentLoteId=id;
+  await loadLotes();
+  const lote=allLotes.find(l=>l.id===id);if(!lote)return;
+  document.getElementById('loteDetailTitle').textContent=lote.nombre;
+  document.getElementById('loteDetailCount').textContent=`${lote.cantidad} cabezas`;
+  document.getElementById('loteDetailInfo').innerHTML=`${lote.potrero?'📍 '+lote.potrero:''}${lote.descripcion?' · '+lote.descripcion:''}`;
+  const tb=document.getElementById('loteDetailBody');
+  tb.innerHTML=lote.animales.map(a=>`<tr>
+    <td><input type="checkbox" class="lote-sel" value="${a.rp}"></td>
+    <td style="font-weight:600;color:var(--accent);cursor:pointer" onclick="closeDetail();openAnimalDetail('${a.rp}')">${a.rp}</td>
+    <td>${a.sexo||'—'}</td><td>${a.pelo||'—'}</td><td>${a.categoria||'—'}</td><td>${a.registro||'—'}</td>
+    <td>${getEdadTexto(a.fecha_nac)}</td>
+    <td><button onclick="quitarDeLote('${a.rp}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px">✕</button></td>
+  </tr>`).join('')||'<tr><td colspan="8" style="color:var(--text3);padding:20px">Sin animales. Usá "+ Agregar" para asignar animales.</td></tr>';
+  showView('loteDetail',lote.nombre);
+}
+function openAgregarAnimalesLote(){
+  const rps=prompt('RPs a agregar (separados por coma o espacio):\nEj: S219, S211, ADE13');if(!rps)return;
+  const list=rps.split(/[,\s]+/).map(r=>r.trim()).filter(r=>r);
+  fetch(`${API}/api/lotes/${currentLoteId}/animales`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rps:list})})
+    .then(r=>r.json()).then(d=>{alert(d.mensaje);openLoteDetail(currentLoteId);loadAnimals();}).catch(e=>alert('Error: '+e.message));
+}
+function quitarDeLote(rp){
+  if(!confirm(`¿Quitar RP ${rp} del lote?`))return;
+  fetch(`${API}/api/lotes/${currentLoteId}/animales`,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({rps:[rp]})})
+    .then(r=>r.json()).then(d=>{openLoteDetail(currentLoteId);}).catch(e=>alert('Error: '+e.message));
+}
+function eliminarLote(){
+  if(!confirm('¿Eliminar este lote? Los animales no se borran, solo se desasignan.'))return;
+  fetch(`${API}/api/lotes/${currentLoteId}`,{method:'DELETE'})
+    .then(r=>r.json()).then(d=>{alert(d.mensaje);showView('lotes');}).catch(e=>alert('Error: '+e.message));
+}
+async function editarLote(){
+  const lote=allLotes.find(l=>l.id===currentLoteId);if(!lote)return;
+  const ov=document.getElementById('modalOverlay'),ct=document.getElementById('modalContent');
+  ct.innerHTML=`<h2>✎ Editar Lote</h2>
+    <label>Nombre</label><input class="ed-input" id="el_nombre" value="${lote.nombre||''}">
+    <label>Potrero / Ubicación</label><input class="ed-input" id="el_potrero" value="${lote.potrero||''}" placeholder="Ej: Potrero 3 - Fondo norte">
+    <label>Descripción</label><input class="ed-input" id="el_desc" value="${lote.descripcion||''}" placeholder="Descripción del lote">
+    <div class="modal-actions"><button class="modal-btn secondary" onclick="closeModal()">Cancelar</button>
+    <button class="modal-btn primary" onclick="guardarLote()">Guardar</button></div>`;
+  ov.classList.add('show');
+}
+async function guardarLote(){
+  try{
+    await fetch(`${API}/api/lotes/${currentLoteId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      nombre:document.getElementById('el_nombre').value.trim()||null,
+      potrero:document.getElementById('el_potrero').value.trim()||null,
+      descripcion:document.getElementById('el_desc').value.trim()||null
+    })});
+    closeModal();openLoteDetail(currentLoteId);
+  }catch(e){alert('Error: '+e.message);}
+}
+function loteSanidadMasiva(){
+  const tipo=prompt('Tipo (VACUNA / TRATAMIENTO / DESPARASITACION):');if(!tipo)return;
+  const producto=prompt('Producto (ej: Ivermectina):');if(!producto)return;
+  const dosis=prompt('Dosis (opcional):')||'';
+  fetch(`${API}/api/lotes/${currentLoteId}/sanidad`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tipo:tipo.toUpperCase(),producto,dosis})})
+    .then(r=>r.json()).then(d=>{alert(d.mensaje);}).catch(e=>alert('Error: '+e.message));
+}
+
+// ── SERVICIOS CSV ──
+let scParsed=null;
+function onServiciosCsvFile(e){
+  const f=e.target.files[0];if(!f)return;
+  const reader=new FileReader();reader.onload=function(ev){
+    const rows=parseCSV(ev.target.result);
+    const mapped=rows.map(r=>{
+      const m={};for(const[k,v]of Object.entries(r)){const kl=k.toLowerCase().trim();m[kl]=v;}
+      return {rp:m.rp||m['número de etiqueta']||'',temporada:m.temporada||'',tipo_servicio:m.tipo_servicio||m.tipo||'',
+        semen_iatf:m.semen_iatf||m.semen||m.iatf||'',fecha_iatf:m.fecha_iatf||'',
+        toro_natural:m.toro_natural||m.toro_repaso||m.repaso||'',fecha_ingreso_toro:m.fecha_ingreso_toro||m.fecha_toro||'',
+        cc_pre:m.cc_pre||m.cc||'',resultado:m.resultado||'',notas:m.notas||''};
+    }).filter(r=>r.rp);
+    scParsed=mapped;
+    const p=document.getElementById('scPreview');p.style.display='block';
+    p.innerHTML=`<strong>${f.name}</strong> — ${mapped.length} servicios detectados`;
+    document.getElementById('scBtn').disabled=false;
+  };reader.readAsText(f);
+}
+async function uploadServiciosCSV(){
+  if(!scParsed||!scParsed.length)return;
+  const btn=document.getElementById('scBtn');btn.disabled=true;btn.textContent='Procesando...';
+  const res=document.getElementById('scResult');res.style.display='block';res.textContent='Enviando...';
+  try{
+    const r=await fetch(`${API}/api/importar/servicios-csv`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({registros:scParsed})});
+    const d=await r.json();res.textContent=d.mensaje||JSON.stringify(d);loadAnimals();
+  }catch(e){res.style.color='var(--red)';res.textContent='❌ '+e.message;}
+  btn.textContent='Procesar';btn.disabled=false;
+}
+
+// ── EDITAR SERVICIO ──
+async function editServicio(id, rp){
+  const s=await fetch(`${API}/api/servicios?limite=5000`).then(r=>r.json()).then(arr=>arr.find(x=>x.id===id));
+  if(!s)return alert('Servicio no encontrado');
+  const ov=document.getElementById('modalOverlay'),ct=document.getElementById('modalContent');
+  ct.innerHTML=`<h2>✎ Editar Servicio #${id}</h2>
+    <div class="form-row"><div><label>Temporada</label><input class="ed-input" id="es_temp" value="${s.temporada||''}"></div>
+    <div><label>Tipo</label><select class="ed-input" id="es_tipo"><option ${s.tipo_servicio==='IATF'?'selected':''}>IATF</option><option ${s.tipo_servicio==='NATURAL'?'selected':''}>NATURAL</option></select></div></div>
+    <div class="form-row"><div><label>Semen IATF</label><input class="ed-input" id="es_semen" value="${s.semen_iatf||''}"></div>
+    <div><label>Fecha IATF</label><input type="date" class="ed-input" id="es_fiatf" value="${s.fecha_iatf||''}"></div></div>
+    <div class="form-row"><div><label>Toro Repaso</label><input class="ed-input" id="es_toro" value="${s.toro_natural||''}"></div>
+    <div><label>Fecha Toro</label><input type="date" class="ed-input" id="es_ftoro" value="${s.fecha_ingreso_toro||''}"></div></div>
+    <div class="form-row"><div><label>CC Pre</label><input type="number" class="ed-input" id="es_cc" value="${s.cc_pre||''}" step="0.5"></div>
+    <div><label>Resultado</label><select class="ed-input" id="es_res"><option value="">Pendiente</option><option ${s.resultado==='PREÑADA_IATF'?'selected':''} value="PREÑADA_IATF">🤰 Preñada IATF</option><option ${s.resultado==='PREÑADA_TORO'?'selected':''} value="PREÑADA_TORO">🤰 Preñada TORO</option><option ${s.resultado==='VACIA'?'selected':''}>VACIA</option></select></div></div>
+    <div class="modal-actions"><button class="modal-btn secondary" onclick="closeModal()">Cancelar</button>
+    <button class="modal-btn primary" onclick="saveServicio(${id},'${rp}')">Guardar</button></div>`;
+  ov.classList.add('show');
+}
+async function saveServicio(id, rp){
+  try{
+    await fetch(`${API}/api/servicios/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      temporada:document.getElementById('es_temp').value||null,tipo_servicio:document.getElementById('es_tipo').value||null,
+      semen_iatf:document.getElementById('es_semen').value||null,fecha_iatf:document.getElementById('es_fiatf').value||null,
+      toro_natural:document.getElementById('es_toro').value||null,fecha_ingreso_toro:document.getElementById('es_ftoro').value||null,
+      cc_pre:document.getElementById('es_cc').value?parseFloat(document.getElementById('es_cc').value):null,
+      resultado:document.getElementById('es_res').value||null
+    })});
+    closeModal();openAnimalDetail(rp);
+  }catch(e){alert('Error: '+e.message);}
+}
+
+// ── INFORMES PDF ──
+function downloadPDF(tipo){
+  const url=`${API}/api/informes/${tipo}`;
+  window.open(url,'_blank');
+}
+
+// ── INIA / BREEDPLAN ──
+function initINIA(){
+  const manOpts='<option value="1">1 - Campo natural</option><option value="2">2 - Campo nat. + Pradera</option><option value="3">3 - Pradera</option><option value="4">4 - Campo nat. + Ración</option><option value="5">5 - Pradera + Ración</option>';
+  document.getElementById('inia_dest_manejo').innerHTML=manOpts;
+  document.getElementById('inia_18m_manejo').innerHTML=manOpts;
+  document.getElementById('inia_comp_manejo').innerHTML=manOpts;
+}
+
+function parseRPs(text){
+  return text.split(/[,\s\n\r]+/).map(s=>s.trim()).filter(s=>s.length>0);
+}
+
+async function iniaDescargar(tipo){
+  let rps=[], url='', filename='', btnId='', stId='';
+  if(tipo==='destete'){
+    rps=parseRPs(document.getElementById('inia_dest_rps').value);
+    if(!rps.length){alert('Escribí al menos un RP');return;}
+    const man=document.getElementById('inia_dest_manejo').value;
+    const fec=document.getElementById('inia_dest_fecha').value;
+    url=`${API}/api/informe-inia/destete`;
+    filename='INIA_Destete.xlsx';
+    btnId='btnDest'; stId='stDest';
+    var postBody={rps,manejo:parseInt(man)};
+    if(fec) postBody.fecha_pesada=fec;
+  } else if(tipo==='18meses'){
+    rps=parseRPs(document.getElementById('inia_18m_rps').value);
+    if(!rps.length){alert('Escribí al menos un RP');return;}
+    const man=document.getElementById('inia_18m_manejo').value;
+    url=`${API}/api/informe-inia/18meses`;
+    filename='INIA_18Meses.xlsx';
+    btnId='btn18m'; stId='st18m';
+    var postBody={rps,manejo:parseInt(man)};
+  } else if(tipo==='servicio'){
+    rps=parseRPs(document.getElementById('inia_serv_rps').value);
+    if(!rps.length){alert('Escribí al menos un RP');return;}
+    url=`${API}/api/informe-inia/servicio`;
+    filename='INIA_Servicio.xlsx';
+    btnId='btnServ'; stId='stServ';
+    var postBody={rps};
+  }
+  const btn=document.getElementById(btnId);
+  const st=document.getElementById(stId);
+  btn.disabled=true; btn.textContent='⏳ Generando...'; st.textContent='';
+  try{
+    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(postBody)});
+    if(!r.ok){ let msg='Error'; try{const j=await r.json();msg=j.error||msg;}catch(x){} throw new Error(msg); }
+    const blob=await r.blob();
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download=filename;
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{a.remove();URL.revokeObjectURL(a.href);},200);
+    st.textContent=`✅ Descargado (${rps.length} animales)`;
+  }catch(e){ st.textContent='❌ '+e.message; }
+  btn.disabled=false; btn.textContent='📊 Generar';
+}
+
+async function iniaCompletar(){
+  const fileEl=document.getElementById('inia_comp_file');
+  if(!fileEl.files[0]){alert('Seleccioná el archivo Excel 299');return;}
+  const tipo=document.getElementById('inia_comp_tipo').value;
+  const man=document.getElementById('inia_comp_manejo').value;
+  const btn=document.getElementById('btnComp');
+  const st=document.getElementById('stComp');
+  btn.disabled=true; btn.textContent='⏳ Procesando...'; st.textContent='';
+  const endpoint = 'completar';
+  const fname = '299_completo.xlsx';
+  try{
+    const buf=await fileEl.files[0].arrayBuffer();
+    const r=await fetch(`${API}/api/informe-inia/${endpoint}?manejo=${man}`,{
+      method:'POST',
+      headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'},
+      body:buf
+    });
+    if(!r.ok){ let msg='Error'; try{const j=await r.json();msg=j.error||msg;}catch(x){} throw new Error(msg); }
+    const blob=await r.blob();
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download=fname;
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{a.remove();URL.revokeObjectURL(a.href);},200);
+    st.textContent='✅ Completado y descargado';
+  }catch(e){ st.textContent='❌ '+e.message; }
+  btn.disabled=false; btn.textContent='📥 Completar y Descargar';
+}
+
+// ── HBU TABLE ──
+async function loadHBU(){
+  try{
+    const data=await fetch(`${API}/api/hbu`).then(r=>r.json());
+    const body=document.getElementById('hbuBody');
+    // Filter: show PP and SA animals (the ones that need HBU)
+    const filtered=data.filter(a=>a.registro==='PP'||a.registro==='SA');
+    const sinHbu=filtered.filter(a=>!a.hbu).length;
+    document.getElementById('hbuInfo').textContent=`${filtered.length} animales PP/SA | ${sinHbu} sin HBU`;
+    body.innerHTML=filtered.map(a=>`<tr>
+      <td style="font-weight:600">${a.rp}</td>
+      <td>${a.registro||''}</td>
+      <td style="font-size:11px">${a.categoria||''}</td>
+      <td><input type="text" value="${a.hbu||''}" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit" data-id="${a.id}" data-field="hbu"></td>
+      <td><input type="text" value="${a.madre_hba||''}" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit" data-id="${a.id}" data-field="madre_hba"></td>
+      <td><input type="text" value="${a.padre_hba||''}" style="width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:inherit" data-id="${a.id}" data-field="padre_hba"></td>
+      <td><button onclick="saveHBU(this)" style="background:var(--accent);color:#fff;border:none;padding:3px 8px;border-radius:4px;font-size:11px;cursor:pointer">💾</button></td>
+    </tr>`).join('');
+  }catch(e){ document.getElementById('hbuInfo').textContent='❌ Error cargando'; }
+}
+
+async function saveHBU(btn){
+  const row=btn.closest('tr');
+  const inputs=row.querySelectorAll('input[data-id]');
+  const id=inputs[0].dataset.id;
+  const body={};
+  inputs.forEach(inp=>{ body[inp.dataset.field]=inp.value.trim(); });
+  try{
+    await fetch(`${API}/api/hbu/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    btn.textContent='✅';
+    setTimeout(()=>btn.textContent='💾',1500);
+  }catch(e){btn.textContent='❌';}
+}
+
+// ── BAJAS ──
+async function revertirBaja(id,rp){
+  if(!confirm(`¿Reactivar el animal ${rp}? Vuelve a estado ACTIVO.`))return;
+  try{
+    const r=await fetch(`${API}/api/animales/revertir-baja`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});
+    const d=await r.json();
+    alert(d.mensaje);
+    loadBajas('TODOS');
+    loadAnimals();
+  }catch(e){alert('Error: '+e.message);}
+}
+
+async function loadBajas(filtro){
+  try{
+    const data=await fetch(`${API}/api/animales/bajas`).then(r=>r.json());
+    let filtered=data;
+    if(filtro==='VENDIDO') filtered=data.filter(a=>a.estado==='VENDIDO');
+    else if(filtro==='MUERTO') filtered=data.filter(a=>a.estado==='MUERTO');
+    
+    const vendidos=data.filter(a=>a.estado==='VENDIDO').length;
+    const muertos=data.filter(a=>a.estado==='MUERTO').length;
+    document.getElementById('bajasInfo').textContent=`Total: ${data.length} bajas · ${vendidos} vendidos · ${muertos} muertos`;
+    
+    document.getElementById('bajasBody').innerHTML=filtered.map(a=>{
+      const estadoColor=a.estado==='VENDIDO'?'var(--gold)':'var(--red)';
+      return `<tr>
+        <td style="font-weight:600;cursor:pointer" onclick="openAnimalDetail('${a.rp}')">${a.rp}</td>
+        <td>${a.categoria||''}</td>
+        <td><span class="tag tag-${(a.registro||'').toLowerCase()}">${a.registro||''}</span></td>
+        <td>${a.sexo||''}</td>
+        <td>${a.fecha_salida||'—'}</td>
+        <td>${a.motivo_salida||'—'}</td>
+        <td style="color:${estadoColor};font-weight:500">${a.estado}</td>
+        <td><button onclick="revertirBaja(${a.id},'${a.rp}')" style="background:var(--accent);color:#fff;border:none;padding:3px 10px;border-radius:4px;font-size:11px;cursor:pointer" title="Reactivar animal">↩️</button></td>
+      </tr>`;
+    }).join('');
+  }catch(e){console.error('Error cargando bajas:',e);}
+}
+
+// ── INIT ──
+loadCampos();
+loadLotes();
+</script>
+</body>
+</html>
