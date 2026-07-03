@@ -1,0 +1,19 @@
+{
+  "name": "amakaik-bot",
+  "version": "4.0.0",
+  "main": "server.js",
+  "engines": {
+    "node": "20.x"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "@anthropic-ai/sdk": "^0.39.0",
+    "better-sqlite3": "^11.6.0",
+    "pdfkit": "^0.15.0",
+    "twilio": "^5.4.0",
+    "exceljs": "^4.4.0"
+  }
+}
