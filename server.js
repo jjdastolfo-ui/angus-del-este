@@ -3039,16 +3039,50 @@ app.get("/api/exportar/animales", (req, res) => {
 });
 
 // ── RODEO RESUMEN (para sincronización con IMPROLUX) ─────────────────────────
-// Devuelve el rodeo activo agrupado por categoría: [{categoria, cantidad}]
-// El campo se resuelve por ?campo= (middleware), default angus_del_este
+// Devuelve el rodeo activo con LAS MISMAS categorías que muestra el dashboard de ADE:
+// Vacas PP/SA/General, Vacas Venta, Toros Plantel/Venta, Vaquillonas, Novillos,
+// Recría 1 Año (<13 meses), Recría 2 Años (13+), Terneros.
 app.get("/api/rodeo-resumen", (req, res) => {
-  const rows = db.prepare(`
-    SELECT COALESCE(NULLIF(TRIM(categoria), ''), 'SIN CATEGORIA') as categoria, COUNT(*) as cantidad
-    FROM animales
-    WHERE estado = 'ACTIVO'
-    GROUP BY COALESCE(NULLIF(TRIM(categoria), ''), 'SIN CATEGORIA')
-    ORDER BY cantidad DESC
-  `).all();
+  const animales = db.prepare("SELECT categoria, registro, destino, sexo, fecha_nac FROM animales WHERE estado = 'ACTIVO'").all();
+  const grupos = {};
+  const push = (nombre, registro) => {
+    const k = nombre + '|' + (registro || 'GENERAL');
+    if (!grupos[k]) grupos[k] = { categoria: nombre, registro: registro || 'GENERAL', cantidad: 0 };
+    grupos[k].cantidad++;
+  };
+  for (const a of animales) {
+    const cat = (a.categoria || '').toUpperCase();
+    const reg = (a.registro || 'GENERAL').toUpperCase();
+    const dest = (a.destino || 'PLANTEL').toUpperCase();
+    if (cat === 'VACA') {
+      if (dest === 'VENTA') push('Vacas Venta', reg);
+      else if (reg === 'PP') push('Vacas PP', 'PP');
+      else if (reg === 'SA') push('Vacas SA', 'SA');
+      else push('Vacas General', 'GENERAL');
+    } else if (cat === 'TORO') {
+      push(dest === 'VENTA' ? 'Toros Venta' : 'Toros Plantel', reg);
+    } else if (cat === 'VAQUILLONA') {
+      push('Vaquillonas', reg);
+    } else if (cat === 'NOVILLO') {
+      push('Novillos', reg);
+    } else if (cat === 'TERNERO') {
+      push('Terneros', reg);
+    } else if (cat === 'RECRIA') {
+      let edadMeses = null;
+      if (a.fecha_nac) edadMeses = Math.floor((new Date() - new Date(a.fecha_nac)) / (1000 * 60 * 60 * 24 * 30.44));
+      if (edadMeses !== null && edadMeses < 13) push('Recría 1 Año', reg);
+      else push('Recría 2 Años', reg);
+    } else {
+      push(cat || 'Sin categoría', reg);
+    }
+  }
+  // Consolidar por nombre de categoría (sumando registros distintos dentro del mismo display, salvo Vacas que ya separan)
+  const porNombre = {};
+  Object.values(grupos).forEach(g => {
+    if (!porNombre[g.categoria]) porNombre[g.categoria] = { categoria: g.categoria, registro: g.registro, cantidad: 0 };
+    porNombre[g.categoria].cantidad += g.cantidad;
+  });
+  const rows = Object.values(porNombre).sort((a, b) => b.cantidad - a.cantidad);
   res.json({ campo: req.campoKey, total: rows.reduce((s, r) => s + r.cantidad, 0), rodeo: rows });
 });
 
