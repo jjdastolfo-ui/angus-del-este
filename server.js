@@ -36,6 +36,7 @@ const CAMPOS = {
     whatsapp: process.env.WHATSAPP_ANGUS || "",
     admin: process.env.ADMIN_ANGUS || "",
     bot_financiero: "https://improlux-bot-production.up.railway.app",
+    campo_improlux: "LA AMISTAD",
     db_file: "angus_del_este.db"
   },
   angus_la_posta: {
@@ -47,6 +48,7 @@ const CAMPOS = {
     whatsapp: process.env.WHATSAPP_POSTA || "",
     admin: process.env.ADMIN_POSTA || "",
     bot_financiero: "https://angus-la-posta-production.up.railway.app",
+    campo_improlux: "LA POSTA",
     db_file: "angus_la_posta.db"
   }
 };
@@ -750,6 +752,39 @@ const HERRAMIENTA_CONSULTA = {
 
 // ── EJECUTAR ACCIÓN ───────────────────────────────────────────────────────────
 const IMPROLUX_URL = (process.env.IMPROLUX_URL || "https://improlux-bot-production.up.railway.app").replace(/\/$/, "");
+
+// Detecta "llovió X mm" / "cayeron X" / "lluvia de X" y devuelve {mm, fecha} o null.
+function detectarLluvia(body) {
+  const low = (body || "").toLowerCase();
+  if (!/(lluvia|llovi[óo]|llovieron|cayeron|cay[óo]|precipit|mm\b|mil[ií]metros)/.test(low)) return null;
+  const m = body.match(/(\d+(?:[.,]\d+)?)\s*mm\b/i)
+         || body.match(/(?:llovi[óo]|llovieron|cayeron|cay[óo]|lluvia(?:\s+de)?|precipit\w*)\s*(?:de\s*)?(\d+(?:[.,]\d+)?)/i);
+  if (!m) return null;
+  const mm = parseFloat(m[1].replace(',', '.'));
+  if (!(mm > 0)) return null;
+  let fecha = new Date();
+  if (/\bayer\b/.test(low)) fecha = new Date(Date.now() - 86400000);
+  return { mm, fecha: fecha.toISOString().slice(0, 10) };
+}
+
+// Registra una lluvia en el DIARIO de IMPROLUX (punto compartido de campo).
+async function registrarLluviaImprolux(mm, campoKey, detalle, fecha) {
+  const cfg = CAMPOS[campoKey] || CAMPOS[CAMPO_DEFAULT];
+  const url = (cfg.bot_financiero || IMPROLUX_URL).replace(/\/$/, "");
+  const campo = cfg.campo_improlux || "LA AMISTAD";
+  const f = fecha || new Date().toISOString().slice(0, 10);
+  try {
+    const resp = await fetch(`${url}/api/diario`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ campo, fecha: f, tipo: "LLUVIA", mm, detalle: detalle || "" })
+    });
+    const d = await resp.json().catch(() => ({}));
+    if (d.ok || d.id) return `🌧️ Lluvia registrada en el diario de ${campo}: ${mm} mm (${f}).`;
+    return `⚠️ No pude registrar la lluvia: ${d.error || ("HTTP " + resp.status)}`;
+  } catch (e) {
+    return `⚠️ No pude conectar con el diario de IMPROLUX (${String(e.message).slice(0, 60)}).`;
+  }
+}
 
 // Descuenta del stock de IMPROLUX esperando la respuesta (para interpretar/repreguntar).
 async function descontarStockImprolux(accion) {
@@ -2418,6 +2453,18 @@ async function procesarMensajeAsync(campoDb, campoKey, usuario, body, from, to) 
   let historial = getHistorial(campoDb, usuario);
   historial.push({ role: "user", content: body });
 
+  // ── INTERCEPT LLUVIA → diario de IMPROLUX (punto compartido de campo) ──
+  {
+    const ll = detectarLluvia(body);
+    if (ll) {
+      const resp = await registrarLluviaImprolux(ll.mm, campoKey, "", ll.fecha);
+      historial.push({ role: "assistant", content: resp });
+      saveHistorial(campoDb, usuario, historial);
+      await enviarWhatsApp(from, to, resp, campoKey);
+      return;
+    }
+  }
+
   const contexto = buildContexto() + "\n\n" + DB_SCHEMA_DOC;
   let respuesta = "";
   let mensajes = historial.slice(-6);
@@ -2511,6 +2558,16 @@ app.post("/webhook-interno", async (req, res) => {
     const body = (req.body.Body || "").trim();
     const usuario = "amakaik-web";
     if (!body) return res.json({ respuesta: "Escribí algo para comenzar." });
+
+    // ── INTERCEPT 0: LLUVIA → diario de IMPROLUX (punto compartido de campo) ──
+    {
+      const ll = detectarLluvia(body);
+      if (ll) {
+        const campoKey = req.body.campo || req.query.campo || CAMPO_DEFAULT;
+        const resp = await registrarLluviaImprolux(ll.mm, campoKey, "", ll.fecha);
+        return res.json({ respuesta: resp });
+      }
+    }
 
     // ── INTERCEPT 1: SERVICIO (prioridad máxima, antes de todo) ──
     if (/servicio|iatf.*fecha|toro\s*repaso/i.test(body) && /RP\s+[A-Za-z0-9]/i.test(body)) {
