@@ -407,6 +407,7 @@ body { font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; ba
       <div class="nav-section">Reproducción</div>
       <div class="nav-item" onclick="showView('repro')"><span class="icon">🐄</span> Protocolos<span class="badge" id="navRepro">—</span></div>
       <div class="nav-item" onclick="showView('reproPartos')"><span class="icon">👶</span> Partos</div>
+      <div class="nav-item" onclick="showView('traslados')"><span class="icon">🚚</span> Traslados</div>
       <div class="nav-section">Gallagher</div>
       <div class="nav-item" onclick="openRegister('gallagher')"><span class="icon">📡</span> Cargar CSV</div>
       <div class="nav-section">Gestión</div>
@@ -497,6 +498,7 @@ body { font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; ba
           <button class="bulk-btn" onclick="bulkAsignarLote()" style="background:#ff9500">🏷️ Asignar a lote</button>
           <button class="bulk-btn" onclick="bulkSanidad()">💉 Sanidad lote</button>
           <button class="bulk-btn" onclick="bulkBreedplan()" style="background:var(--gold)">📊 Breedplan</button>
+          <button class="bulk-btn" onclick="bulkTrasladar()" style="background:#0B6E4F">🚚 Trasladar</button>
           <button class="bulk-btn" onclick="bulkDocilidad()" style="background:var(--accent)">📋 Docilidad</button>
           <button class="bulk-btn danger" onclick="bulkBaja()">📤 Dar baja</button>
           <button class="bulk-btn" onclick="bulkIATF()">🧬 IATF</button>
@@ -1105,6 +1107,13 @@ Ejemplos:
         <div id="reproPartosLista"></div>
       </div>
 
+      <div class="view" id="viewTraslados">
+        <h2>Traslados entre campos</h2>
+        <p class="repro-sub">Los animales se mueven con toda su historia: pesadas, servicios, mediciones y costos.
+          Sólo entre campos de la misma empresa.</p>
+        <div id="trasladosLista"></div>
+      </div>
+
       <div class="view" id="viewAlertas">
         <h2 style="margin-bottom:16px">🔔 Alertas</h2>
         <div id="alertasContainer"></div>
@@ -1254,6 +1263,7 @@ function showView(v,t,push=true){
   else if(v==='repro'){document.getElementById('viewRepro').classList.add('active');tt.textContent='Reproducción';bb.style.display='inline';reproCargar();}
   else if(v==='reproDetalle'){document.getElementById('viewReproDetalle').classList.add('active');tt.textContent=t||'Protocolo';bb.style.display='inline';}
   else if(v==='reproPartos'){document.getElementById('viewReproPartos').classList.add('active');tt.textContent='Partos';bb.style.display='inline';reproCargarPartos();}
+  else if(v==='traslados'){document.getElementById('viewTraslados').classList.add('active');tt.textContent='Traslados';bb.style.display='inline';cargarTraslados();}
   if(window.innerWidth<768){document.getElementById('sidebar').classList.remove('open');document.getElementById('backdrop').classList.remove('show');}
   mSyncNav(v);
 }
@@ -5715,6 +5725,117 @@ async function reproCorregirPadre(partoId, cria){
     reproCargarPartos();
   }catch(e){ alert(e.message); }
 }
+
+// ═══ TRASLADOS ENTRE CAMPOS ═════════════════════════════════════════════════
+// Los animales se mueven con toda su historia, no se dan de baja y de alta.
+
+async function bulkTrasladar(){
+  const sel = getSelected();
+  if(!sel.length) return;
+
+  let destinos = [];
+  try{
+    destinos = await fetch(apiUrl('/api/traslados/destinos')).then(r=>r.json());
+  }catch(e){ alert('No pude leer los campos de destino: '+e.message); return; }
+
+  if(!destinos.length){
+    alert('No hay otros campos de esta empresa a los que trasladar.');
+    return;
+  }
+
+  document.getElementById('modalContent').innerHTML = `
+    <h3 style="margin:0 0 4px;font-size:19px">Trasladar ${sel.length} animal${sel.length>1?'es':''}</h3>
+    <p style="color:var(--text2);font-size:13px;margin:0 0 18px">
+      Se llevan su historia completa: pesadas, mediciones, servicios y costos.
+      Dejan de figurar en este campo.</p>
+    <div class="repro-campos" style="margin:0">
+      <div class="repro-campo"><label>Campo de destino *</label>
+        <select id="trDestino">
+          ${destinos.map(d=>`<option value="${d.key}">${esc(d.nombre)} — ${d.animales} cab.</option>`).join('')}
+        </select></div>
+      <div class="repro-campo"><label>Fecha</label>
+        <input type="date" id="trFecha" value="${new Date().toISOString().slice(0,10)}"></div>
+      <div class="repro-campo"><label>Guía / DTe</label><input id="trGuia" placeholder="AR-…"></div>
+      <div class="repro-campo"><label>Motivo</label><input id="trMotivo" placeholder="Recría, servicio, engorde…"></div>
+    </div>
+    <div style="margin-top:16px;padding:12px 14px;background:var(--surface2);border-radius:8px;font-size:13px">
+      <b>Animales:</b> ${sel.slice(0,20).map(esc).join(', ')}${sel.length>20?` …y ${sel.length-20} más`:''}
+    </div>
+    <div style="margin-top:20px;display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn-sec" onclick="closeModal()">Cancelar</button>
+      <button class="btn-pri" onclick="confirmarTraslado()">Trasladar</button></div>`;
+  document.getElementById('modalOverlay').classList.add('show');
+  window._trasladoSel = sel;
+}
+
+async function confirmarTraslado(){
+  const rps = window._trasladoSel || [];
+  const destino = document.getElementById('trDestino');
+  const nombreDest = destino.selectedOptions[0].text.split(' — ')[0];
+  if(!confirm(`¿Trasladar ${rps.length} animal${rps.length>1?'es':''} a ${nombreDest}?\n\nDejan de figurar en este campo.`)) return;
+
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = 'Trasladando…';
+  try{
+    const r = await fetch(apiUrl('/api/traslados'),{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        campo_origen: campoActual,
+        campo_destino: destino.value,
+        rps,
+        fecha: document.getElementById('trFecha').value,
+        guia: document.getElementById('trGuia').value.trim(),
+        motivo: document.getElementById('trMotivo').value.trim()
+      })});
+    const t = await r.text();
+    let d; try{ d = JSON.parse(t); }catch(e){ throw new Error(`Respuesta inesperada (HTTP ${r.status})`); }
+    if(!d.ok) throw new Error(d.error + (d.errores?.length ? '\n\n'+d.errores.join('\n') : ''));
+    closeModal();
+    alert(d.mensaje);
+    loadAnimals();
+  }catch(e){
+    alert(e.message);
+    btn.disabled = false; btn.textContent = 'Trasladar';
+  }
+}
+
+async function cargarTraslados(){
+  const cont = document.getElementById('trasladosLista');
+  cont.innerHTML = '<div class="vacio">Cargando…</div>';
+  try{
+    const lista = await fetch(apiUrl('/api/traslados')).then(r=>r.json());
+    if(!lista.length){
+      cont.innerHTML = '<div class="vacio"><div style="font-size:38px">🚚</div>'
+        + '<p>Todavía no hay traslados.<br>Seleccioná animales en el rodeo y usá <b>Trasladar</b>.</p></div>';
+      return;
+    }
+    cont.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:auto">
+      <table class="tabla-repro"><thead><tr>
+        <th>Fecha</th><th>Desde</th><th>Hacia</th><th>Animales</th><th>Guía</th><th>Motivo</th></tr></thead>
+      <tbody>${lista.map(t=>{
+        const rps = String(t.rps||'').split(',').filter(Boolean);
+        return `<tr>
+          <td>${t.fecha}</td>
+          <td>${esc(nombreCampo(t.campo_origen))}</td>
+          <td><b>${esc(nombreCampo(t.campo_destino))}</b></td>
+          <td><b>${t.cantidad}</b>
+            <div class="motivo">${esc(rps.slice(0,8).join(', '))}${rps.length>8?` …+${rps.length-8}`:''}</div></td>
+          <td>${esc(t.guia||'—')}</td>
+          <td style="color:var(--text2)">${esc(t.motivo||'')}</td>
+        </tr>`;}).join('')}</tbody></table></div>`;
+  }catch(e){
+    cont.innerHTML = '<div class="vacio"><p>No pude cargar los traslados.<br>'+e.message+'</p></div>';
+  }
+}
+
+// El registro guarda la clave del campo; para mostrarlo se usa el nombre.
+let _nombresCampos = {};
+function nombreCampo(key){ return _nombresCampos[key] || key; }
+(async()=>{ try{
+  const c = await fetch(`${API_BASE}/api/campos`).then(r=>r.json());
+  c.forEach(x=>_nombresCampos[x.key]=x.nombre);
+}catch(e){} })();
+
 </script>
 </body>
 </html>
