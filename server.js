@@ -8,6 +8,8 @@ try { PDFDocument = require("pdfkit"); } catch(e) { console.log("pdfkit no dispo
 let ExcelJS;
 try { ExcelJS = require("exceljs"); } catch(e) { console.log("exceljs no disponible, informes Excel deshabilitados"); }
 let importador;
+let traslados;
+try { traslados = require("./traslados.js"); } catch(e) { console.log("traslados.js no disponible:", e.message); }
 let reproduccion;
 try { reproduccion = require("./reproduccion.js"); } catch(e) { console.log("reproduccion.js no disponible:", e.message); }
 let consistencia;
@@ -481,6 +483,8 @@ for (const [key, campo] of Object.entries(CAMPOS)) {
   // Las tablas de los módulos van en TODAS las bases: cada campo tiene la suya.
   try { if (reproduccion) reproduccion.init(database); }
   catch(e) { console.log(`repro init ${key}:`, e.message); }
+  try { if (traslados) traslados.init(database); }
+  catch(e) { console.log(`traslados init ${key}:`, e.message); }
   databases[key] = database;
   
   const count = database.prepare("SELECT COUNT(*) as n FROM animales").get().n;
@@ -6403,6 +6407,68 @@ async function consumirStock(campoKey, producto, cantidad, detalle, fecha) {
     return { ok: false, error: `No pude conectar con el stock (${String(e.message).slice(0, 50)})` };
   }
 }
+
+
+// ── TRASLADOS Y CONSOLIDADO POR EMPRESA ──────────────────────────────────────
+function camposDeEmpresa(campoKey) {
+  const emp = (CAMPOS[campoKey] || {}).empresa;
+  return Object.keys(CAMPOS)
+    .filter(k => CAMPOS[k].empresa === emp)
+    .map(k => ({ key: k, nombre: CAMPOS[k].nombre, db: getDB(k) }));
+}
+
+// Los campos a los que se puede trasladar: los de la misma empresa.
+app.get("/api/traslados/destinos", (req, res) => {
+  const origen = req.query.campo || CAMPO_DEFAULT;
+  res.json(camposDeEmpresa(origen)
+    .filter(c => c.key !== origen)
+    .map(c => ({ key: c.key, nombre: c.nombre,
+                 animales: c.db.prepare("SELECT COUNT(*) n FROM animales WHERE estado='ACTIVO'").get().n })));
+});
+
+app.post("/api/traslados", (req, res) => {
+  if (!traslados) return res.status(503).json({ error: "Módulo de traslados no disponible" });
+  const origen = req.body.campo_origen || req.query.campo || CAMPO_DEFAULT;
+  const destino = req.body.campo_destino;
+  if (!CAMPOS[origen] || !CAMPOS[destino]) return res.status(400).json({ error: "Campo inválido" });
+  if (origen === destino) return res.status(400).json({ error: "El origen y el destino son el mismo campo" });
+  if (CAMPOS[origen].empresa !== CAMPOS[destino].empresa) {
+    return res.status(400).json({ error: "Sólo se puede trasladar entre campos de la misma empresa" });
+  }
+  const rps = req.body.rps || [];
+  if (!rps.length) return res.status(400).json({ error: "No elegiste ningún animal" });
+
+  try {
+    const r = traslados.trasladar(
+      { origen: getDB(origen), destino: getDB(destino) }, rps,
+      { fecha: req.body.fecha, guia: req.body.guia, motivo: req.body.motivo,
+        usuario: req.body.usuario, campoOrigen: origen, campoDestino: destino,
+        nombreOrigen: CAMPOS[origen].nombre, nombreDestino: CAMPOS[destino].nombre });
+    res.status(r.ok ? 200 : 400).json(r);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get("/api/traslados", (req, res) => {
+  if (!traslados) return res.json([]);
+  res.json(traslados.historialTraslados(getDB(req.query.campo || CAMPO_DEFAULT)));
+});
+
+// Progenie sumada entre todos los campos de la empresa: un toro usado en dos
+// campos tiene sus hijos repartidos, y para evaluarlo hay que verlos juntos.
+app.get("/api/empresa/progenie", (req, res) => {
+  if (!traslados) return res.status(503).json({ error: "Módulo no disponible" });
+  const campos = camposDeEmpresa(req.query.campo || CAMPO_DEFAULT);
+  res.json({
+    empresa: (CAMPOS[req.query.campo || CAMPO_DEFAULT] || {}).empresa,
+    campos: campos.map(c => c.nombre),
+    padres: traslados.progenieConsolidada(campos, req.query.padre)
+  });
+});
+
+app.get("/api/empresa/resumen", (req, res) => {
+  if (!traslados) return res.status(503).json({ error: "Módulo no disponible" });
+  res.json(traslados.resumenEmpresa(camposDeEmpresa(req.query.campo || CAMPO_DEFAULT)));
+});
 
 // ── REPRODUCCIÓN: protocolo de servicio en etapas ────────────────────────────
 // Módulo nuevo y aparte. Convive con `servicios` sin pisarlo.
