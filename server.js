@@ -8,6 +8,10 @@ try { PDFDocument = require("pdfkit"); } catch(e) { console.log("pdfkit no dispo
 let ExcelJS;
 try { ExcelJS = require("exceljs"); } catch(e) { console.log("exceljs no disponible, informes Excel deshabilitados"); }
 let importador;
+let decision;
+try { decision = require("./decision.js"); } catch(e) { console.log("decision.js no disponible:", e.message); }
+let tablero;
+try { tablero = require("./tablero.js"); } catch(e) { console.log("tablero.js no disponible:", e.message); }
 let traslados;
 try { traslados = require("./traslados.js"); } catch(e) { console.log("traslados.js no disponible:", e.message); }
 let reproduccion;
@@ -485,6 +489,8 @@ for (const [key, campo] of Object.entries(CAMPOS)) {
   catch(e) { console.log(`repro init ${key}:`, e.message); }
   try { if (traslados) traslados.init(database); }
   catch(e) { console.log(`traslados init ${key}:`, e.message); }
+  try { if (decision) decision.init(database); }
+  catch(e) { console.log(`decision init ${key}:`, e.message); }
   databases[key] = database;
   
   const count = database.prepare("SELECT COUNT(*) as n FROM animales").get().n;
@@ -813,6 +819,14 @@ mediciones(id, animal_id, fecha, tipo[CE/ALTURA/CC/FRAME/DOCILIDAD], valor)
 PROTOCOLO DE SERVICIO (módulo nuevo, tablas repro_*): las cuatro etapas son programación de toros (con RP, nombre y registro HBU/HBA), ejecución (sincronización, IATF, entrada y salida del toro de repaso), ecografía precoz que confirma la IATF, y ecografía final que cierra el servicio y adjudica el toro. Al nacer, el padre se asigna solo: hasta 15 días después de la fecha probable de la IATF es del toro de IATF, después es del repaso.
 - Para registrar un parto por este protocolo usá {"accion":"registrar_parto_protocolo","madre_rp":"","rp_cria":"","fecha":"","peso_nac":0,"pelo":"","sexo":"M/H"}. Peso, pelo, RP y madre son OBLIGATORIOS: si falta alguno, pedíselo al usuario antes de registrar.
 - Para ver cómo viene el servicio usá {"accion":"estado_protocolo"}.
+
+PRODUCTIVIDAD DE LA VACA: la medida que importa no es cuánto pesa el ternero al destete, sino KG DESTETADOS SOBRE EL PESO ADULTO DE LA MADRE (el peso de la vaca al destete, preñada de 3 a 6 meses). Una vaca de 430 kg que desteta 215 rinde 50%, mejor que una de 600 que desteta 250 (41%), porque come menos todo el año. Si preguntan cuál es la vaca más productiva o cómo anda una vaca, calculá esa relación.
+
+DESCARTE: el único motivo eliminatorio es NO DESTETAR — quedó vacía, abortó, el ternero nació muerto, o no lo crió. Esa vaca se va a terminación. Todo lo demás se pondera: se atrasa a cola o tardía dos años seguidos, más de 420 días entre partos, desteta menos que el promedio, notas de campo negativas, edad.
+
+NOTAS DE CAMPO: si alguien dice algo suelto sobre un animal ("la 2077 malparió", "la C437 es brava"), guardalo como nota con {"accion":"nota_campo","rp":"...","texto":"..."}. Las que indican que no destetó son decisivas para el descarte.
+
+TABLERO: si preguntan por bloques de parición (cabeza, cuerpo, cola, tardía), intervalo entre partos, eficiencia de las vacas o qué animales están atrasados, usá la herramienta de consulta SQL. El bloque sale del mes de parto de la cría: hasta el 30/08 CABEZA, septiembre CUERPO, octubre COLA, después TARDIA. El intervalo entre partos son los días entre las fechas de nacimiento de dos crías consecutivas de la misma madre.
 
 REVISIÓN DE CONSISTENCIA: si el usuario pregunta por errores, inconsistencias, datos raros o si algo "no cuadra" en servicios, partos o crías, respondé con la acción {"accion":"revisar_consistencia"}. Si después de una revisión el usuario pide corregir, respondé {"accion":"corregir_inconsistencias"}. Detecta crías anotadas que no existen, vacas que ya parieron pero figuran preñadas, madres o padres contradictorios y fechas imposibles.
 
@@ -2859,6 +2873,17 @@ function ejecutarAccion(accion) {
       resp += "\n\n";
     }
     return resp.trim();
+  }
+
+  // ── NOTA DE CAMPO ──
+  if (accion.accion === "nota_campo") {
+    if (!decision) return "El módulo de notas no está disponible.";
+    if (!accion.rp || !accion.texto) return "Necesito el RP del animal y qué anotar.";
+    const a = db.prepare("SELECT rp FROM animales WHERE upper(rp)=upper(?)").get(accion.rp);
+    if (!a) return `No encuentro el animal ${accion.rp}.`;
+    const r = decision.guardarNota(db, a.rp, accion.texto, { usuario, fecha: accion.fecha });
+    return `📝 Anotado en la ficha de ${a.rp}.` +
+      (r.aviso ? `\n\n⚠️ ${r.aviso}` : "");
   }
 
   // ── CONSISTENCIA ──
@@ -6408,6 +6433,123 @@ async function consumirStock(campoKey, producto, cantidad, detalle, fecha) {
   }
 }
 
+
+
+
+// ── DECISIÓN ─────────────────────────────────────────────────────────────────
+// El campo se organiza por sistemas productivos: cría, recría y terminación.
+// Lo que define qué vaca se queda es cuánto desteta en relación a su propio
+// peso, y el único corte duro es no destetar.
+function decOk(res) {
+  if (decision) return true;
+  res.status(503).json({ error: "Módulo de decisión no disponible" });
+  return false;
+}
+
+app.get("/api/cria", (req, res) => {
+  if (!decOk(res)) return;
+  try { res.json(decision.cria(dbRepro(req), { temporada: req.query.temporada, anio_paricion: req.query.anio })); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// La pantalla de marzo: quién se va y por qué.
+app.get("/api/descartes", (req, res) => {
+  if (!decOk(res)) return;
+  try {
+    res.json(decision.descartes(dbRepro(req), {
+      temporada: req.query.temporada, anio_paricion: req.query.anio,
+      objetivo: req.query.objetivo ? parseInt(req.query.objetivo) : null }));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get("/api/recria-detalle", (req, res) => {
+  if (!decOk(res)) return;
+  try { res.json(decision.recria(dbRepro(req))); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Notas de campo: lo que se ve mirando los animales.
+app.post("/api/notas", (req, res) => {
+  if (!decOk(res)) return;
+  const { rp, texto } = req.body;
+  if (!rp || !texto) return res.status(400).json({ error: "Falta el RP o el texto de la nota" });
+  try { res.json(decision.guardarNota(dbRepro(req), rp, texto, req.body)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get("/api/notas", (req, res) => {
+  if (!decOk(res)) return;
+  const base = dbRepro(req);
+  try {
+    res.json(req.query.rp
+      ? base.prepare("SELECT * FROM notas_campo WHERE upper(animal_rp)=upper(?) ORDER BY fecha DESC").all(req.query.rp)
+      : base.prepare("SELECT * FROM notas_campo ORDER BY fecha DESC LIMIT 200").all());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get("/api/mas-productiva", (req, res) => {
+  if (!decOk(res)) return;
+  try { res.json(decision.masProductiva(dbRepro(req), { temporada: req.query.temporada, anio_paricion: req.query.anio })); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── TABLERO ──────────────────────────────────────────────────────────────────
+// Cuatro vistas que responden decisiones: qué vaca se queda, qué toro dejó mejor
+// progenie, qué falta de la parición, cómo vienen las recrías.
+function tableroOk(res) {
+  if (tablero) return true;
+  res.status(503).json({ error: "Módulo de tablero no disponible" });
+  return false;
+}
+
+app.get("/api/tablero/vacas", (req, res) => {
+  if (!tableroOk(res)) return;
+  try { res.json(tablero.vacas(dbRepro(req), { temporada: req.query.temporada })); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get("/api/tablero/toros", async (req, res) => {
+  if (!tableroOk(res)) return;
+  const campoKey = req.query.campo || CAMPO_DEFAULT;
+  // El stock de pajuelas vive en el financiero: si no responde, el tablero
+  // igual se arma, sólo que sin las dosis.
+  let stock = {};
+  try {
+    (await pajuelasDisponibles(campoKey)).forEach(p => { stock[p.nombre] = p.cantidad; });
+  } catch (e) {}
+  try { res.json(tablero.toros(camposDeEmpresa(campoKey), stock)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get("/api/tablero/nacimientos", (req, res) => {
+  if (!tableroOk(res)) return;
+  try { res.json(tablero.nacimientos(dbRepro(req), { anio: req.query.anio })); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get("/api/tablero/recrias", (req, res) => {
+  if (!tableroOk(res)) return;
+  try { res.json(tablero.recrias(dbRepro(req))); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Todo junto, para pintar el tablero de una sola vez.
+app.get("/api/tablero", async (req, res) => {
+  if (!tableroOk(res)) return;
+  const campoKey = req.query.campo || CAMPO_DEFAULT;
+  const base = dbRepro(req);
+  try {
+    let stock = {};
+    try { (await pajuelasDisponibles(campoKey)).forEach(p => { stock[p.nombre] = p.cantidad; }); } catch (e) {}
+    res.json({
+      campo: (CAMPOS[campoKey] || {}).nombre,
+      vacas: tablero.vacas(base, { temporada: req.query.temporada }),
+      toros: tablero.toros(camposDeEmpresa(campoKey), stock),
+      nacimientos: tablero.nacimientos(base, { anio: req.query.anio }),
+      recrias: tablero.recrias(base)
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // ── TRASLADOS Y CONSOLIDADO POR EMPRESA ──────────────────────────────────────
 function camposDeEmpresa(campoKey) {
