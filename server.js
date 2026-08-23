@@ -8,6 +8,10 @@ try { PDFDocument = require("pdfkit"); } catch(e) { console.log("pdfkit no dispo
 let ExcelJS;
 try { ExcelJS = require("exceljs"); } catch(e) { console.log("exceljs no disponible, informes Excel deshabilitados"); }
 let importador;
+let carga;
+try { carga = require("./carga.js"); } catch(e) { console.log("carga.js no disponible:", e.message); }
+let ficha;
+try { ficha = require("./ficha.js"); } catch(e) { console.log("ficha.js no disponible:", e.message); }
 let analisis;
 try { analisis = require("./analisis.js"); } catch(e) { console.log("analisis.js no disponible:", e.message); }
 let vistas;
@@ -497,6 +501,8 @@ for (const [key, campo] of Object.entries(CAMPOS)) {
   catch(e) { console.log(`decision init ${key}:`, e.message); }
   try { if (vistas) vistas.init(database); }
   catch(e) { console.log(`vistas init ${key}:`, e.message); }
+  try { if (carga) carga.init(database); }
+  catch(e) { console.log(`carga init ${key}:`, e.message); }
   databases[key] = database;
   
   const count = database.prepare("SELECT COUNT(*) as n FROM animales").get().n;
@@ -840,6 +846,14 @@ La definición sólo puede usar estas operaciones:
 Los campos disponibles son: rp, bloque, parto, servicio, padre, tacto, destete, peso_nac, peso_adulto, productividad, ipp, crias, edad, destete_ok. Si el usuario pide algo con un dato que no está en esa lista, decíselo en vez de inventarlo.
 
 ANTES DE GUARDAR, explicale qué entendiste y qué va a hacer la columna. Si te pide ver las que agregó usá {"accion":"listar_vistas"}, y para sacar una {"accion":"borrar_vista","nombre":"..."}.
+
+CARGA RAZONADA: cuando alguien carga datos, no los tragues. Contrastalos contra lo que ya hay y contá qué encontraste: cuántos registros entraron, qué resumen dan (promedios, rango de fechas), y qué NO cierra — un RP repetido, un animal que ya existe, una madre que no está, una vaca con dos crías el mismo año, un peso que no cierra con su historia, fechas imposibles.
+
+Después de informar, esperá la corrección. Las correcciones se piden hablando: "la 2077 no existe, borrala", "el RP correcto es S603 no rp603", "la madre de S610 es la 2655", "el peso de la 105 del 18/3 era 190". Respondé con {"accion":"corregir_carga","que":"...","rp":"...", …} usando: borrar_animal, cambiar_rp (con "nuevo"), asignar_madre (con "madre"), corregir_peso (con "fecha" y "peso"), borrar_pesada (con "fecha"). Si la corrección es ambigua, preguntá antes de aplicarla.
+
+FICHA DE UN ANIMAL: si preguntan por una vaca en particular — "cómo viene la 2077", "mostrame la ficha de la 19056" — usá {"accion":"ficha_animal","rp":"..."}.
+
+TACTO CORREGIDO: el veterinario estima en la manga de dónde viene la preñez, pero el nacimiento manda. Contando desde la fecha probable de parto de la IATF: ±10 días es IATF, después 20 días es TORO CABEZA, otros 20 TORO CUERPO, otros 20 TORO COLA. Las vacas donde el tacto no coincidió con el nacimiento están "corregidas", y eso importa porque preñar en la cabeza del repaso no es lo mismo que en la cola.
 
 ANALIZAR EN VEZ DE CONTAR: cuando la pregunta necesita interpretar el estado del rodeo — en qué está cada vaca, si algo anda mal, por qué un número da raro, qué conviene hacer — usá {"accion":"analizar","pregunta":"..."}. Eso te devuelve los datos crudos de los vientres (servicios con fecha, tactos, crías, pesadas, notas) para que razones vos, sin estados precalculados.
 
@@ -2945,6 +2959,36 @@ function ejecutarAccion(accion) {
     if (!objetivo) return `No encuentro ninguna columna que se llame "${accion.nombre}".`;
     vistas.borrar(db, emp, objetivo.id);
     return `Saqué *${objetivo.nombre}* del tablero.`;
+  }
+
+  // ── CORREGIR LO QUE SE CARGÓ MAL ──
+  if (accion.accion === "corregir_carga") {
+    if (!carga) return "El módulo de carga no está disponible.";
+    const r = carga.corregir(db, accion);
+    return r.ok ? `✅ ${r.mensaje}` : `❌ ${r.error}`;
+  }
+
+  // ── FICHA DE UN ANIMAL ──
+  if (accion.accion === "ficha_animal") {
+    if (!ficha) return "El módulo de ficha no está disponible.";
+    const f = ficha.ficha(db, accion.rp);
+    if (!f.ok) return f.error;
+    const R = f.resumen;
+    let t = `🐄 *${f.rp}*${f.hba ? ` · ${f.hba}` : ""}${f.pelo ? ` · ${f.pelo}` : ""}\n`;
+    t += `${R.edad_meses ? R.edad_meses + " meses · " : ""}${R.peso_adulto ? R.peso_adulto + " kg · " : ""}${R.partos} parto${R.partos === 1 ? "" : "s"}\n`;
+    if (R.destete_promedio) t += `Destete promedio ${R.destete_promedio} kg`;
+    if (R.eficiencia) t += ` · eficiencia ${R.eficiencia}%`;
+    if (R.intervalo_partos) t += ` · ${R.intervalo_partos} días entre partos`;
+    t += `\n\n*Historial*\n`;
+    f.campanas.slice(-6).forEach(c => {
+      t += `${c.campana}: ${c.parto ? `parió ${c.parto} (${c.bloque})` : "sin parto"}`;
+      if (c.ternero) t += ` · ${c.ternero}`;
+      if (c.destete) t += ` · destetó ${c.destete} kg`;
+      if (c.tacto_corregido) t += ` ⚠️ el tacto decía ${c.tacto_manga}, el nacimiento dice ${c.tacto_real}`;
+      t += `\n`;
+    });
+    if (f.corregidos) t += `\n${f.corregidos} tacto${f.corregidos > 1 ? "s" : ""} corregido${f.corregidos > 1 ? "s" : ""} por la fecha de nacimiento.`;
+    return t;
   }
 
   // ── NOTA DE CAMPO ──
@@ -6509,6 +6553,50 @@ async function consumirStock(campoKey, producto, cantidad, detalle, fecha) {
 
 
 
+
+
+
+// ── CARGA RAZONADA ───────────────────────────────────────────────────────────
+// Antes de escribir, se contrasta lo nuevo contra lo que ya hay y se informa
+// qué no cierra. Las correcciones se piden hablando.
+app.post("/api/carga/revisar", (req, res) => {
+  if (!carga) return res.status(503).json({ error: "Módulo no disponible" });
+  const { tipo, filas } = req.body;
+  if (!tipo || !Array.isArray(filas)) return res.status(400).json({ error: "Falta el tipo o las filas" });
+  try {
+    const obs = carga.revisar(dbRepro(req), tipo, filas);
+    res.json({ observaciones: obs, informe: carga.informe(tipo, filas, obs, req.body.resumen) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/api/carga/corregir", (req, res) => {
+  if (!carga) return res.status(503).json({ error: "Módulo no disponible" });
+  try { res.json(carga.corregir(dbRepro(req), req.body)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get("/api/cargas", (req, res) => {
+  if (!carga) return res.json([]);
+  res.json(carga.historial(dbRepro(req), parseInt(req.query.n) || 20));
+});
+
+// ── FICHA DE LA VACA ─────────────────────────────────────────────────────────
+// Todo lo de un animal en un solo lugar: sus números, de dónde viene, y una
+// fila por campaña con el servicio, el tacto corregido, el parto y el ternero.
+app.get("/api/ficha/:rp", (req, res) => {
+  if (!ficha) return res.status(503).json({ error: "Módulo de ficha no disponible" });
+  try {
+    const f = ficha.ficha(dbRepro(req), req.params.rp);
+    res.status(f.ok ? 200 : 404).json(f);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// El tacto de la manga contra lo que dijo el nacimiento.
+app.get("/api/tacto-corregido", (req, res) => {
+  if (!ficha) return res.status(503).json({ error: "Módulo no disponible" });
+  try { res.json(ficha.resumenCorregidos(dbRepro(req), { temporada: req.query.temporada })); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // ── ANÁLISIS: el bot razona sobre los datos crudos ───────────────────────────
 // No recibe estados calculados: recibe los hechos con sus fechas y saca la
