@@ -8,6 +8,8 @@ try { PDFDocument = require("pdfkit"); } catch(e) { console.log("pdfkit no dispo
 let ExcelJS;
 try { ExcelJS = require("exceljs"); } catch(e) { console.log("exceljs no disponible, informes Excel deshabilitados"); }
 let importador;
+let vistas;
+try { vistas = require("./vistas.js"); } catch(e) { console.log("vistas.js no disponible:", e.message); }
 let decision;
 try { decision = require("./decision.js"); } catch(e) { console.log("decision.js no disponible:", e.message); }
 let tablero;
@@ -491,6 +493,8 @@ for (const [key, campo] of Object.entries(CAMPOS)) {
   catch(e) { console.log(`traslados init ${key}:`, e.message); }
   try { if (decision) decision.init(database); }
   catch(e) { console.log(`decision init ${key}:`, e.message); }
+  try { if (vistas) vistas.init(database); }
+  catch(e) { console.log(`vistas init ${key}:`, e.message); }
   databases[key] = database;
   
   const count = database.prepare("SELECT COUNT(*) as n FROM animales").get().n;
@@ -819,6 +823,21 @@ mediciones(id, animal_id, fecha, tipo[CE/ALTURA/CC/FRAME/DOCILIDAD], valor)
 PROTOCOLO DE SERVICIO (módulo nuevo, tablas repro_*): las cuatro etapas son programación de toros (con RP, nombre y registro HBU/HBA), ejecución (sincronización, IATF, entrada y salida del toro de repaso), ecografía precoz que confirma la IATF, y ecografía final que cierra el servicio y adjudica el toro. Al nacer, el padre se asigna solo: hasta 15 días después de la fecha probable de la IATF es del toro de IATF, después es del repaso.
 - Para registrar un parto por este protocolo usá {"accion":"registrar_parto_protocolo","madre_rp":"","rp_cria":"","fecha":"","peso_nac":0,"pelo":"","sexo":"M/H"}. Peso, pelo, RP y madre son OBLIGATORIOS: si falta alguno, pedíselo al usuario antes de registrar.
 - Para ver cómo viene el servicio usá {"accion":"estado_protocolo"}.
+
+ARMAR COLUMNAS DEL TABLERO: el administrador puede pedir que agregues columnas, marcas o números al tablero, hablando. Ejemplos: "compará el bloque de este servicio con el anterior", "agregame una columna con los kg destetados sobre el peso de la vaca", "marcá en rojo las que tienen más de 420 días entre partos".
+
+Respondé con {"accion":"definir_vista","nombre":"...","tipo":"columna|marca|kpi","pantalla":"cria","definicion":{...}}.
+
+La definición sólo puede usar estas operaciones:
+- {"op":"comparar_temporadas","campo":"bloque","temporadas":["2025","2026"]} — cómo cambió un dato entre dos años. Campos que se pueden comparar: bloque, destete.
+- {"op":"formula","expr":"(destete / peso_adulto) * 100"} — cuenta entre campos numéricos.
+- {"op":"clasificar","campo":"ipp","rangos":[{"hasta":380,"etiqueta":"BIEN","nivel":"mejor"},{"desde":380,"etiqueta":"ATRASADA","nivel":"peor"}]}
+- {"op":"regla","filtro":{"campo":"ipp","op":">","valor":420},"color":"rojo","texto":"..."} — para tipo "marca".
+- {"op":"contar","filtro":{...}} — para tipo "kpi".
+
+Los campos disponibles son: rp, bloque, parto, servicio, padre, tacto, destete, peso_nac, peso_adulto, productividad, ipp, crias, edad, destete_ok. Si el usuario pide algo con un dato que no está en esa lista, decíselo en vez de inventarlo.
+
+ANTES DE GUARDAR, explicale qué entendiste y qué va a hacer la columna. Si te pide ver las que agregó usá {"accion":"listar_vistas"}, y para sacar una {"accion":"borrar_vista","nombre":"..."}.
 
 PRODUCTIVIDAD DE LA VACA: la medida que importa no es cuánto pesa el ternero al destete, sino KG DESTETADOS SOBRE EL PESO ADULTO DE LA MADRE (el peso de la vaca al destete, preñada de 3 a 6 meses). Una vaca de 430 kg que desteta 215 rinde 50%, mejor que una de 600 que desteta 250 (41%), porque come menos todo el año. Si preguntan cuál es la vaca más productiva o cómo anda una vaca, calculá esa relación.
 
@@ -2873,6 +2892,44 @@ function ejecutarAccion(accion) {
       resp += "\n\n";
     }
     return resp.trim();
+  }
+
+  // ── EL ADMIN PIDE UNA COLUMNA NUEVA ──
+  if (accion.accion === "definir_vista") {
+    if (!vistas) return "El módulo de vistas no está disponible.";
+    const campoK = campoActualKey || CAMPO_DEFAULT;
+    const emp = (CAMPOS[campoK] || {}).empresa || "sin_empresa";
+    const d = {
+      pantalla: accion.pantalla || "cria", tipo: accion.tipo || "columna",
+      nombre: accion.nombre, definicion: accion.definicion,
+      pedido: accion.pedido || body, creada_por: usuario
+    };
+    const err = vistas.validar(d.definicion);
+    if (err) return `No pude armar eso: ${err}`;
+    const r = vistas.guardar(db, emp, d);
+    if (!r.ok) return `No pude guardarlo: ${r.error}`;
+    return `✅ Listo. ${vistas.explicar(d)}\n\nYa está en el tablero para todos los campos de la empresa. ` +
+      `Si no te sirve, decime "sacá ${d.nombre}".`;
+  }
+
+  if (accion.accion === "listar_vistas") {
+    if (!vistas) return "El módulo de vistas no está disponible.";
+    const emp = (CAMPOS[campoActualKey || CAMPO_DEFAULT] || {}).empresa || "sin_empresa";
+    const l = vistas.listar(db, emp);
+    if (!l.length) return "Todavía no agregaste ninguna columna propia al tablero.";
+    return `Columnas y marcas que agregaste:\n\n` +
+      l.map(d => `· *${d.nombre}* (${d.pantalla}) — ${vistas.explicar(d)}`).join("\n");
+  }
+
+  if (accion.accion === "borrar_vista") {
+    if (!vistas) return "El módulo de vistas no está disponible.";
+    const emp = (CAMPOS[campoActualKey || CAMPO_DEFAULT] || {}).empresa || "sin_empresa";
+    const l = vistas.listar(db, emp);
+    const objetivo = l.find(d => d.nombre.toLowerCase() === String(accion.nombre || "").toLowerCase())
+      || l.find(d => d.nombre.toLowerCase().includes(String(accion.nombre || "").toLowerCase()));
+    if (!objetivo) return `No encuentro ninguna columna que se llame "${accion.nombre}".`;
+    vistas.borrar(db, emp, objetivo.id);
+    return `Saqué *${objetivo.nombre}* del tablero.`;
   }
 
   // ── NOTA DE CAMPO ──
@@ -6435,6 +6492,62 @@ async function consumirStock(campoKey, producto, cantidad, detalle, fecha) {
 
 
 
+
+
+// ── VISTAS DEFINIDAS POR EL ADMIN ────────────────────────────────────────────
+// El admin le pide algo al bot y queda guardado para toda la empresa. No se
+// reescribe la pantalla: se guarda la definición y el tablero la lee.
+const ADMIN_VISTAS = (process.env.ADMIN_VISTAS || "").split(",").map(x => x.trim()).filter(Boolean);
+function esAdmin(req) {
+  if (!ADMIN_VISTAS.length) return true;   // sin configurar, no se bloquea
+  const u = String(req.body?.usuario || req.query.usuario || "").trim();
+  return ADMIN_VISTAS.includes(u);
+}
+function empresaDe(campoKey) { return (CAMPOS[campoKey] || {}).empresa || "sin_empresa"; }
+
+app.get("/api/vistas", (req, res) => {
+  if (!vistas) return res.json([]);
+  const emp = empresaDe(req.query.campo || CAMPO_DEFAULT);
+  res.json(vistas.listar(dbRepro(req), emp, req.query.pantalla));
+});
+
+app.post("/api/vistas", (req, res) => {
+  if (!vistas) return res.status(503).json({ error: "Módulo no disponible" });
+  if (!esAdmin(req)) return res.status(403).json({ error: "Sólo el administrador puede agregar columnas" });
+  const emp = empresaDe(req.body.campo || req.query.campo || CAMPO_DEFAULT);
+  const r = vistas.guardar(dbRepro(req), emp, req.body);
+  if (r.ok) r.explicacion = vistas.explicar(req.body);
+  res.status(r.ok ? 200 : 400).json(r);
+});
+
+app.delete("/api/vistas/:id", (req, res) => {
+  if (!vistas) return res.status(503).json({ error: "Módulo no disponible" });
+  if (!esAdmin(req)) return res.status(403).json({ error: "Sólo el administrador puede sacar columnas" });
+  res.json(vistas.borrar(dbRepro(req), empresaDe(req.query.campo || CAMPO_DEFAULT), req.params.id));
+});
+
+// El tablero de cría con las columnas que definió el admin ya aplicadas.
+app.get("/api/cria-vistas", (req, res) => {
+  if (!decision) return res.status(503).json({ error: "Módulo no disponible" });
+  const base = dbRepro(req);
+  const campoKey = req.query.campo || CAMPO_DEFAULT;
+  try {
+    const c = decision.descartes(base, { temporada: req.query.temporada, anio_paricion: req.query.anio,
+      objetivo: req.query.objetivo ? parseInt(req.query.objetivo) : null });
+    const filas = c.eliminatorias.concat(c.ordenadas);
+    let def = [], extra = { columnas: [], kpis: [], marcas: [] };
+    if (vistas) {
+      def = vistas.listar(base, empresaDe(campoKey), "cria");
+      // La historia por temporada es lo que permite comparar años.
+      const campos = [...new Set(def.filter(d => d.definicion.op === "comparar_temporadas")
+        .map(d => d.definicion.campo))];
+      const hist = {};
+      campos.forEach(cp => Object.assign(hist, vistas.historiaCampo(base, cp)));
+      extra = vistas.aplicar(filas, def, hist);
+    }
+    res.json({ ...c, filas, vistas: def, extra });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // ── DECISIÓN ─────────────────────────────────────────────────────────────────
 // El campo se organiza por sistemas productivos: cría, recría y terminación.
