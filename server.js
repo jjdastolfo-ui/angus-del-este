@@ -6659,7 +6659,7 @@ app.get("/api/cria-vistas", (req, res) => {
   try {
     const c = decision.descartes(base, { temporada: req.query.temporada, anio_paricion: req.query.anio,
       objetivo: req.query.objetivo ? parseInt(req.query.objetivo) : null });
-    const filas = c.eliminatorias.concat(c.ordenadas);
+    const filas = c.eliminatorias.concat(c.ordenadas, c.en_curso || []);
     let def = [], extra = { columnas: [], kpis: [], marcas: [] };
     if (vistas) {
       def = vistas.listar(base, empresaDe(campoKey), "cria");
