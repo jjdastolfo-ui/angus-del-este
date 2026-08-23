@@ -8,6 +8,8 @@ try { PDFDocument = require("pdfkit"); } catch(e) { console.log("pdfkit no dispo
 let ExcelJS;
 try { ExcelJS = require("exceljs"); } catch(e) { console.log("exceljs no disponible, informes Excel deshabilitados"); }
 let importador;
+let analisis;
+try { analisis = require("./analisis.js"); } catch(e) { console.log("analisis.js no disponible:", e.message); }
 let vistas;
 try { vistas = require("./vistas.js"); } catch(e) { console.log("vistas.js no disponible:", e.message); }
 let decision;
@@ -839,6 +841,10 @@ Los campos disponibles son: rp, bloque, parto, servicio, padre, tacto, destete, 
 
 ANTES DE GUARDAR, explicale qué entendiste y qué va a hacer la columna. Si te pide ver las que agregó usá {"accion":"listar_vistas"}, y para sacar una {"accion":"borrar_vista","nombre":"..."}.
 
+ANALIZAR EN VEZ DE CONTAR: cuando la pregunta necesita interpretar el estado del rodeo — en qué está cada vaca, si algo anda mal, por qué un número da raro, qué conviene hacer — usá {"accion":"analizar","pregunta":"..."}. Eso te devuelve los datos crudos de los vientres (servicios con fecha, tactos, crías, pesadas, notas) para que razones vos, sin estados precalculados.
+
+Usalo especialmente si algo no cuadra. Ejemplo: si ves muchas vacas preñadas sin cría registrada, NO concluyas que abortaron: fijate cuándo fue el servicio. Con gestación de 283 días, un servicio de diciembre pare en septiembre — en agosto esas vacas todavía no parieron.
+
 PRODUCTIVIDAD DE LA VACA: la medida que importa no es cuánto pesa el ternero al destete, sino KG DESTETADOS SOBRE EL PESO ADULTO DE LA MADRE (el peso de la vaca al destete, preñada de 3 a 6 meses). Una vaca de 430 kg que desteta 215 rinde 50%, mejor que una de 600 que desteta 250 (41%), porque come menos todo el año. Si preguntan cuál es la vaca más productiva o cómo anda una vaca, calculá esa relación.
 
 DESCARTE: el único motivo eliminatorio es NO DESTETAR — quedó vacía, abortó, el ternero nació muerto, o no lo crió. Esa vaca se va a terminación. Todo lo demás se pondera: se atrasa a cola o tardía dos años seguidos, más de 420 días entre partos, desteta menos que el promedio, notas de campo negativas, edad.
@@ -1419,6 +1425,15 @@ async function procesarSanidad(accion) {
 async function ejecutarAccionAsync(accion) {
   if (accion.accion === "registrar_sanidad" || accion.accion === "sanidad_lote")
     return await procesarSanidad(accion);
+
+  // Analizar es lo único que necesita pensar antes de responder: el bot mira
+  // los datos crudos y saca la conclusión, en vez de leer un número calculado.
+  if (accion.accion === "analizar") {
+    if (!analisis) return "El módulo de análisis no está disponible.";
+    const r = await analisis.analizar(db, anthropic, accion.pregunta || "", { limite: 60 });
+    return r.ok ? r.respuesta : `No pude analizarlo: ${r.error}`;
+  }
+
   return ejecutarAccion(accion);
 }
 
@@ -6493,6 +6508,28 @@ async function consumirStock(campoKey, producto, cantidad, detalle, fecha) {
 
 
 
+
+
+// ── ANÁLISIS: el bot razona sobre los datos crudos ───────────────────────────
+// No recibe estados calculados: recibe los hechos con sus fechas y saca la
+// conclusión. Así no falla cuando aparece una situación que no previmos.
+app.post("/api/analizar", async (req, res) => {
+  if (!analisis) return res.status(503).json({ error: "Módulo de análisis no disponible" });
+  const pregunta = req.body.pregunta || req.body.Body;
+  if (!pregunta) return res.status(400).json({ error: "Falta la pregunta" });
+  try {
+    const r = await analisis.analizar(dbRepro(req), anthropic, pregunta, {
+      limite: parseInt(req.body.limite) || 60 });
+    res.status(r.ok ? 200 : 500).json(r);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Lo que el bot deduce del campo sin que nadie le cargue parámetros.
+app.get("/api/contexto", (req, res) => {
+  if (!analisis) return res.status(503).json({ error: "Módulo no disponible" });
+  try { res.json(analisis.contexto(dbRepro(req))); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // ── VISTAS DEFINIDAS POR EL ADMIN ────────────────────────────────────────────
 // El admin le pide algo al bot y queda guardado para toda la empresa. No se

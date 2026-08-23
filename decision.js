@@ -15,6 +15,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 const dias = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
+const sumarDias = (f, n) => { const d = new Date(f); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+const GESTACION = 283;
 const prom = a => a.length ? Math.round((a.reduce((x, y) => x + y, 0) / a.length) * 100) / 100 : null;
 const r2 = n => n == null ? null : Math.round(n * 100) / 100;
 
@@ -161,21 +163,45 @@ function cria(db, opciones = {}) {
     const notasAnio = notas.filter(n => String(n.fecha || "").startsWith(anioParicion));
     const notaGrave = notasAnio.find(n => n.grave);
 
-    // ¿Destetó? Es el corte duro. Puede fallar en cualquier eslabón.
-    let destete_ok = true, causa = null;
+    // El estado depende de dónde está la vaca en el ciclo. Una preñada que
+    // todavía no llegó a su fecha de parto NO es un aborto: está esperando.
+    const prenada = servicio && /PRE/i.test(String(servicio.resultado || ""));
+    const base = servicio && (servicio.fecha_iatf || servicio.fecha_ingreso_toro);
+    const fppServicio = base ? sumarDias(base, GESTACION) : null;
+    // Margen de tolerancia: recién después se considera que falló.
+    const yaDebioParir = fppServicio ? dias(fppServicio, hoy) > 25 : false;
+
+    let destete_ok = null, causa = null, estado = null;
+
     if (notaGrave) {
+      // Una nota de campo manda sobre cualquier cálculo.
       destete_ok = false;
       causa = (notaGrave.causa || "").split(",")[0];
-    } else if (!criaAnio) {
-      destete_ok = false;
-      causa = servicio && /PRE/i.test(String(servicio.resultado || "")) ? "ABORTO" : "VACIA";
-    } else if (criaAnio.estado && criaAnio.estado !== "ACTIVO") {
-      destete_ok = false;
-      causa = "TERNERO_MUERTO";
-    } else if (criaAnio.des == null && dias(criaAnio.fecha_nac, hoy) > 240) {
-      // Pasaron más de 8 meses y no hay peso de destete.
-      destete_ok = false;
-      causa = "NO_CRIO";
+      estado = "FALLÓ";
+    } else if (criaAnio) {
+      // Parió. Falta saber si llegó a destetar.
+      if (criaAnio.estado && criaAnio.estado !== "ACTIVO") {
+        destete_ok = false; causa = "TERNERO_MUERTO"; estado = "FALLÓ";
+      } else if (criaAnio.des != null) {
+        destete_ok = true; estado = "DESTETÓ";
+      } else if (dias(criaAnio.fecha_nac, hoy) > 240) {
+        // Más de 8 meses sin peso de destete: no lo crió.
+        destete_ok = false; causa = "NO_CRIO"; estado = "FALLÓ";
+      } else {
+        // Parió hace poco: el ternero está al pie, todavía no se destetó.
+        destete_ok = null; estado = "CRIANDO";
+      }
+    } else if (prenada && !yaDebioParir) {
+      // Preñada esperando parto. No se juzga todavía.
+      destete_ok = null; estado = "PREÑADA";
+    } else if (prenada && yaDebioParir) {
+      // Pasó la fecha con margen y no hay cría: acá sí falló.
+      destete_ok = false; causa = "ABORTO"; estado = "FALLÓ";
+    } else if (servicio) {
+      destete_ok = false; causa = "VACIA"; estado = "FALLÓ";
+    } else {
+      // Sin servicio esta temporada: no se puede evaluar.
+      destete_ok = null; estado = "SIN SERVICIO";
     }
 
     const destete = criaAnio ? criaAnio.des : null;
@@ -193,10 +219,13 @@ function cria(db, opciones = {}) {
       ["COLA", "TARDIA"].includes(bloquesPrevios[1]);
 
     const destetes = crias.map(c => c.des).filter(Boolean);
-    const edad = v.fecha_nac ? Math.floor(dias(v.fecha_nac, hoy) / 365.25) : null;
+    // Una edad imposible delata una fecha de nacimiento mal cargada.
+    let edad = v.fecha_nac ? Math.floor(dias(v.fecha_nac, hoy) / 365.25) : null;
+    const edad_sospechosa = edad != null && (edad > 25 || edad < 0);
+    if (edad_sospechosa) edad = null;
 
     filas.push({
-      rp: v.rp, edad, peso_adulto: pesoAdulto,
+      rp: v.rp, edad, edad_sospechosa, fecha_nac: v.fecha_nac, peso_adulto: pesoAdulto,
       servicio: servicio ? (servicio.fecha_iatf || servicio.fecha_ingreso_toro) : null,
       padre: servicio ? (servicio.semen_iatf || servicio.toro_natural) : null,
       tacto: servicio ? servicio.resultado : null,
@@ -204,6 +233,7 @@ function cria(db, opciones = {}) {
       ternero: criaAnio ? criaAnio.rp : null,
       peso_nac: criaAnio ? criaAnio.pn : null,
       destete, productividad, bloque, ipp,
+      estado, fpp: fppServicio, prenada: !!prenada,
       crias: crias.length,
       destete_prom: prom(destetes),
       destete_ok, causa,
@@ -224,7 +254,11 @@ function cria(db, opciones = {}) {
     f.vs_promedio = promProd ? r2(f.productividad - promProd) : null;
   });
 
-  const noDestetaron = filas.filter(f => !f.destete_ok);
+  // Sólo se juzga a las que ya completaron el ciclo: las preñadas y las que
+  // están criando todavía no fallaron ni acertaron.
+  const evaluables = filas.filter(f => f.destete_ok !== null);
+  const noDestetaron = filas.filter(f => f.destete_ok === false);
+  const enCurso = filas.filter(f => f.destete_ok === null);
   const paridas = filas.filter(f => f.parto);
   const porBloque = {};
   ["CABEZA", "CUERPO", "COLA", "TARDIA"].forEach(b => { porBloque[b] = paridas.filter(f => f.bloque === b).length; });
@@ -233,10 +267,18 @@ function cria(db, opciones = {}) {
     filas,
     resumen: {
       vientres: filas.length,
-      destetaron: filas.length - noDestetaron.length,
+      destetaron: evaluables.filter(f => f.destete_ok).length,
       no_destetaron: noDestetaron.length,
-      // El número que resume el año de cría.
-      destete_efectivo: filas.length ? Math.round(((filas.length - noDestetaron.length) / filas.length) * 100) : null,
+      // Las que todavía no se pueden juzgar, por estado.
+      en_curso: enCurso.length,
+      por_estado: ["PREÑADA","CRIANDO","DESTETÓ","FALLÓ","SIN SERVICIO"]
+        .map(e => ({ estado: e, n: filas.filter(f => f.estado === e).length }))
+        .filter(x => x.n > 0),
+      // El destete efectivo se calcula sobre las evaluables, no sobre el total:
+      // con la parición a mitad de camino, contar el total da un número falso.
+      destete_efectivo: evaluables.length
+        ? Math.round((evaluables.filter(f => f.destete_ok).length / evaluables.length) * 100) : null,
+      evaluables: evaluables.length,
       productividad_prom: promProd,
       destete_prom: prom(filas.map(f => f.destete).filter(Boolean)),
       peso_adulto_prom: prom(filas.map(f => f.peso_adulto).filter(Boolean)),
@@ -266,6 +308,8 @@ function descartes(db, opciones = {}) {
   const evaluar = f => {
     const motivos = [];
     let puntos = 0;
+    // Las que están en curso no se juzgan: se muestran aparte.
+    if (f.destete_ok === null) return { puntos: -1, motivos: [{ texto: f.estado.toLowerCase(), peso: "en curso" }] };
     if (!f.destete_ok) {
       motivos.push({ texto: f.causa_texto, peso: "eliminatorio" });
       puntos += 1000;   // sale sí o sí
@@ -283,21 +327,27 @@ function descartes(db, opciones = {}) {
       // Lo bueno resta puntos de descarte; lo malo suma.
       puntos += positiva ? -15 : 12;
     });
-    if (f.edad && f.edad >= 10) { motivos.push({ texto: `${f.edad} años`, peso: "medio" }); puntos += 15; }
+    if (f.edad && f.edad >= 10 && !f.edad_sospechosa) {
+      motivos.push({ texto: `${f.edad} años`, peso: "medio" }); puntos += 15;
+    }
     return { puntos, motivos };
   };
 
   const filas = c.filas.map(f => ({ ...f, ...evaluar(f) }))
     .sort((a, b) => b.puntos - a.puntos);
 
-  const eliminatorias = filas.filter(f => !f.destete_ok);
-  const resto = filas.filter(f => f.destete_ok);
+  const eliminatorias = filas.filter(f => f.destete_ok === false);
+  const resto = filas.filter(f => f.destete_ok === true);
+  // Preñadas y criando: todavía no se pueden evaluar.
+  const en_curso = filas.filter(f => f.destete_ok === null);
 
   return {
     // Las que salen sin discusión.
     eliminatorias,
     // El resto, de peor a mejor: acá se aprieta el criterio.
     ordenadas: resto,
+    // Las que están a mitad del ciclo, para que no desaparezcan del tablero.
+    en_curso,
     objetivo,
     faltan: objetivo ? Math.max(0, objetivo - eliminatorias.length) : null,
     resumen: {
