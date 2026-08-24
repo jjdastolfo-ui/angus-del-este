@@ -7953,6 +7953,31 @@ const costeo = require("./costeo");
 const motoresCosteo = costeo.init(databases, app, { CAMPO_DEFAULT });
 
 const PORT = process.env.PORT || 3001;
+// ── TEMPORAL: copiar la base a otro servidor ─────────────────────────────────
+// Railway no comparte volúmenes entre servicios, así que el servidor nuevo se
+// baja el archivo por acá. SACAR cuando la copia esté hecha: no conviene dejar
+// una puerta de descarga abierta.
+app.get("/bajar-base", (req, res) => {
+  if (!process.env.CLAVE_BACKUP || req.query.clave !== process.env.CLAVE_BACKUP)
+    return res.status(403).send("clave incorrecta");
+  const campo = req.query.campo || CAMPO_DEFAULT;
+  const archivo = path.join(DB_DIR, `${campo}.db`);
+  if (!fs.existsSync(archivo)) return res.status(404).send(`no existe ${archivo}`);
+  res.download(archivo);
+});
+
+// Qué hay en el volumen, para saber qué copiar.
+app.get("/ver-base", (req, res) => {
+  if (!process.env.CLAVE_BACKUP || req.query.clave !== process.env.CLAVE_BACKUP)
+    return res.status(403).send("clave incorrecta");
+  try {
+    res.json(fs.readdirSync(DB_DIR).map(f => {
+      const st = fs.statSync(path.join(DB_DIR, f));
+      return { archivo: f, kb: Math.round(st.size / 1024), modificado: st.mtime };
+    }));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.listen(PORT, () => {
   console.log(`GANADERÍA Bot corriendo en puerto ${PORT}`);
   
