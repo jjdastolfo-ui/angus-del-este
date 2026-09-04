@@ -167,7 +167,11 @@ function plantel(db, opciones = {}) {
   const destinadas = vientres.filter(v => salen.has(String(v.rp).toUpperCase())).length;
   const quedan = opciones.incluirDestinados ? vientres : vientres.filter(v => !salen.has(String(v.rp).toUpperCase()));
 
-  const filas = quedan.map(v => armarVientre(db, v, { hoy, anioParicion, cortes: cal.cortes }));
+  // Las crías que viven en otros campos de la empresa cuentan igual: son hijos
+  // de esta vaca. Quien llama pasa una función rp → [crías]; sin eso, sólo las
+  // de este campo (el módulo sigue sirviendo solo).
+  const criasFuera = typeof opciones.criasFuera === "function" ? opciones.criasFuera : () => [];
+  const filas = quedan.map(v => armarVientre(db, v, { hoy, anioParicion, cortes: cal.cortes, criasFuera }));
   const resumen = resumir(filas, anioParicion);
   resumen.destinadas = destinadas;
   if (destinadas && !opciones.incluirDestinados) resumen.avisos.push({ n: destinadas, texto: "con destino de salida marcado: no se cuentan acá, están en Destinos" });
@@ -193,7 +197,7 @@ function armarVientre(db, v, ctx) {
                             ORDER BY COALESCE(temporada,'') DESC, id DESC`).all(v.id);
   } catch (e) {}
 
-  const crias = db.prepare(`
+  const criasAca = db.prepare(`
     SELECT a.id, a.rp, a.fecha_nac, a.sexo, a.pelo, a.estado, a.padre_rp,
       (SELECT peso FROM pesadas p WHERE p.animal_id=a.id AND upper(COALESCE(p.contexto,''))='NACIMIENTO'
        ORDER BY p.fecha LIMIT 1) pn,
@@ -201,6 +205,10 @@ function armarVientre(db, v, ctx) {
        ORDER BY p.fecha DESC LIMIT 1) destete
     FROM animales a WHERE upper(COALESCE(a.madre_rp,''))=upper(?)
     ORDER BY a.fecha_nac`).all(v.rp);
+  // Los hijos que están en otro campo de la empresa cuentan como partos suyos:
+  // si no, la vaca figura vacía cuando en realidad crió afuera.
+  const deFuera = (ctx.criasFuera ? ctx.criasFuera(v.rp) : []).filter(c => !criasAca.some(x => String(x.rp).toUpperCase() === String(c.rp).toUpperCase()));
+  const crias = [...criasAca, ...deFuera].sort((a, b) => String(a.fecha_nac || "").localeCompare(String(b.fecha_nac || "")));
 
   let notas = [];
   try {
@@ -289,6 +297,9 @@ function armarVientre(db, v, ctx) {
     edad_meses: edadM, edad_rara: edadRara,
     peso_adulto: pAdulto,
     partos: crias.length,
+    hijos_otros_campos: deFuera.length || undefined,
+    ternero_campo: criaAnio && criaAnio.campo ? criaAnio.campo : undefined,
+    ternero_campo_nombre: criaAnio && criaAnio.campo_nombre ? criaAnio.campo_nombre : undefined,
     pn_prom: prom(pns),
     destete_prom: destetePromedio,
     // La medida que decide: cuánto desteta en relación a su propio peso.
@@ -397,7 +408,8 @@ function ficha(db, rp, opciones = {}) {
       parto: cria ? cria.fecha_nac : null,
       bloque: cria ? bloqueDe(cria.fecha_nac, cortes) : null,
       ternero: cria ? cria.rp : null, peso_nac: cria ? cria.pn : null,
-      destete: cria ? cria.destete : null, sexo: cria ? cria.sexo : null, pelo: cria ? cria.pelo : null
+      destete: cria ? cria.destete : null, sexo: cria ? cria.sexo : null, pelo: cria ? cria.pelo : null,
+      campo: cria && cria.campo ? cria.campo : null, campo_nombre: cria && cria.campo_nombre ? cria.campo_nombre : null
     });
   }
   // Crías sin servicio cargado: igual aparecen.
@@ -406,7 +418,8 @@ function ficha(db, rp, opciones = {}) {
     if (campanas.some(x => String(x.parto || "").startsWith(anio))) continue;
     campanas.push({ campana: `${+anio - 1}/${anio.slice(2)}`, servicio: null,
       tacto_manga: null, tacto_real: null, parto: c.fecha_nac, bloque: bloqueDe(c.fecha_nac, cortes),
-      ternero: c.rp, peso_nac: c.pn, destete: c.destete, sexo: c.sexo, pelo: c.pelo, sin_servicio: true });
+      ternero: c.rp, peso_nac: c.pn, destete: c.destete, sexo: c.sexo, pelo: c.pelo, sin_servicio: true,
+      campo: c.campo || null, campo_nombre: c.campo_nombre || null });
   }
   campanas.sort((a, b) => String(a.campana).localeCompare(String(b.campana)));
 

@@ -320,6 +320,53 @@ function crear({ CAMPOS, getDB, empresasDe }) {
     return { ok: !!r.changes };
   }
 
+  /**
+   * Todas las crías que viven en los otros campos, agrupadas por la madre de
+   * este campo: Map(clave compacta del RP de la madre → [crías]).
+   *
+   * Se atribuye una cría a una madre de acá sólo si no puede ser de una madre
+   * del propio campo del hijo: o el vínculo está anotado (madre_campo), o ese
+   * RP no existe allá. Así dos vacas con el mismo número en campos distintos
+   * no se roban los terneros.
+   */
+  function mapaCriasFuera(campoKey, opciones = {}) {
+    const relacion = opciones.relacion === "padre" ? "padre" : "madre";
+    const colRp = relacion + "_rp", colCampo = relacion + "_campo";
+    const empresa = empresasDe().empresaDe(campoKey);
+    if (empresa.campos.length < 2) return new Map();
+    const propio = indiceVigente(campoKey, opciones.fresco ? 0 : 20000);
+    const mapa = new Map();
+    for (const c of empresa.campos) {
+      if (c.key === campoKey || !CAMPOS[c.key]) continue;
+      let filas = [], suIndice;
+      try {
+        suIndice = indiceVigente(c.key, opciones.fresco ? 0 : 20000);
+        filas = getDB(c.key).prepare(`SELECT h.id, h.rp, h.fecha_nac, h.sexo, h.pelo, h.estado, h.padre_rp, h.madre_rp, h.madre_campo, h.padre_campo,
+          (SELECT peso FROM pesadas p WHERE p.animal_id=h.id AND upper(COALESCE(p.contexto,''))='NACIMIENTO' ORDER BY p.fecha LIMIT 1) pn,
+          (SELECT peso FROM pesadas p WHERE p.animal_id=h.id AND upper(COALESCE(p.contexto,''))='DESTETE' ORDER BY p.fecha DESC LIMIT 1) destete
+          FROM animales h WHERE COALESCE(h.${colRp},'') <> ''`).all();
+      } catch (e) { continue; }
+      for (const h of filas) {
+        const clave = compacto(h[colRp]);
+        if (!clave) continue;
+        const aquí = propio.get(clave);
+        if (!aquí || !aquí.length) continue;                       // ese animal no está en este campo
+        const explicito = h[colCampo] === campoKey;
+        if (!explicito) {
+          const enSuCampo = suIndice.get(clave);
+          if (enSuCampo && enSuCampo.length) continue;             // la madre puede ser del propio campo del hijo
+        }
+        if (aquí.length > 1) continue;                             // ambiguo acá: no se adivina
+        const k = compacto(aquí[0].rp);
+        if (!mapa.has(k)) mapa.set(k, []);
+        mapa.get(k).push({ id: h.id, rp: h.rp, fecha_nac: h.fecha_nac, sexo: h.sexo, pelo: h.pelo, estado: h.estado,
+          padre_rp: h.padre_rp, madre_rp: h.madre_rp, pn: h.pn, peso_nac: h.pn, destete: h.destete,
+          campo: c.key, campo_nombre: c.nombre, vinculado: explicito });
+      }
+    }
+    return mapa;
+  }
+
   /** Los hijos que este animal tiene en los otros campos de la empresa. */
   function hijosFuera(campoKey, rp, nombre) {
     const empresa = empresasDe().empresaDe(campoKey);
@@ -357,7 +404,7 @@ function crear({ CAMPOS, getDB, empresasDe }) {
   }
 
   return { init, indice, buscarEnEmpresa, revisar, revisarEmpresa, aplicar, marcarExternos, externos,
-    olvidarExterno, hijosFuera, familiaFuera, olvidar, caravanaColor };
+    olvidarExterno, hijosFuera, mapaCriasFuera, familiaFuera, olvidar, caravanaColor };
 }
 
 module.exports = { init, crear, caravanaColor };

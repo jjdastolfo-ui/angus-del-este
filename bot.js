@@ -531,7 +531,7 @@ ${cal.cortes ? `Bloques de la parición en curso: cabeza hasta ${cal.cortes.CABE
     const usuario = ctx.usuario || null;
     switch (nombre) {
       case "plantel": {
-        const p = plantelMod.plantel(db, { anio: input.anio, incluirDestinados: !!input.incluir_destinados });
+        const p = plantelMod.plantel(db, { anio: input.anio, incluirDestinados: !!input.incluir_destinados, criasFuera: deps.criasFuera ? deps.criasFuera(ctx.campoKey) : undefined });
         let filas = p.filas;
         if (input.estado) filas = filas.filter(f => f.estado === String(input.estado).toUpperCase());
         if (input.causa) filas = filas.filter(f => f.causa === String(input.causa).toUpperCase());
@@ -545,12 +545,13 @@ ${cal.cortes ? `Bloques de la parición en curso: cabeza hasta ${cal.cortes.CABE
       case "ficha": {
         const g = animalesMod.ficha(db, input.rp);
         if (!g.ok) return g;
-        const v = g.es_vientre ? plantelMod.ficha(db, g.rp) : { ok: false };
+        const v = g.es_vientre ? plantelMod.ficha(db, g.rp, { criasFuera: deps.criasFuera ? deps.criasFuera(ctx.campoKey) : undefined }) : { ok: false };
         const f = v.ok ? { ...g, ...v } : g;
         // Recortes para no inflar el contexto: lo reciente y lo relevante.
         return { ...f, pesadas: (f.pesadas || []).slice(-24), sanidad: (f.sanidad || []).slice(0, 12), mediciones: (f.mediciones || []).slice(0, 12), _id: undefined, _crias: undefined, _servicios: undefined };
       }
-      case "toros": return animalesMod.toros(db, { estado: input.estado, anio: input.anio, incluirDestinados: !!input.incluir_destinados });
+      case "toros": return animalesMod.toros(db, { estado: input.estado, anio: input.anio, incluirDestinados: !!input.incluir_destinados,
+        hijosFuera: deps.hijosFuera ? deps.hijosFuera(ctx.campoKey) : undefined });
       case "buscar": return { resultados: animalesMod.buscar(db, input.q, { limite: 20 }) };
       case "consultar": return correrConsulta(db, input.sql);
       case "escribir":

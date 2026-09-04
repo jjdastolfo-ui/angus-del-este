@@ -89,6 +89,18 @@ los campos y clasifica cada caso:
 | Es semen o un toro de afuera ("KARE 16", "IVAR 4") | lo reconoce como externo, no como error |
 | No está en ningún campo | lo lista para cargarlo |
 
+**Los hijos cuentan aunque estén en otro campo, sin tener que arreglar nada.** Una
+vaca de un campo con terneros criándose en otro tiene sus partos, su destete
+promedio, su eficiencia, su intervalo entre partos y su estado (CRIANDO, DESTETÓ)
+calculados con esos hijos, y el historial de partos dice en qué campo nació cada
+uno. Lo mismo con los toros: suman los hijos que tuvieron sirviendo en otro campo.
+Pasa solo, al leer: no hace falta pedirle nada al bot.
+
+Para no equivocarse cuando dos campos tienen animales con el mismo número, una
+cría se atribuye a la madre de otro campo sólo si no puede ser de una madre del
+suyo (o el vínculo ya está anotado). El asterisco al lado de "Partos" o "Hijos"
+avisa que hay hijos de otros campos incluidos.
+
 Con el vínculo anotado, la ficha del ternero muestra a la madre con su campo y un
 link para ir; y en la ficha de la madre aparecen los hijos que tiene en los otros
 campos. La búsqueda entiende también "46 VERDE" (caravana y color).

@@ -72,7 +72,12 @@ function toros(db, opciones = {}) {
 
   const out = quedan.map(t => {
     const claves = new Set([compacto(t.rp), compacto(t.nombre)].filter(Boolean));
-    const hijos = hijosDe.filter(h => claves.has(compacto(h.padre_rp)));
+    // Un toro puede haber servido en otro campo de la empresa: esos hijos son suyos.
+    const fuera = (opciones.hijosFuera ? opciones.hijosFuera(t.rp) : [])
+      .concat(t.nombre && opciones.hijosFuera ? opciones.hijosFuera(t.nombre) : [])
+      .filter((h, i, l) => l.findIndex(x => x.rp === h.rp && x.campo === h.campo) === i);
+    const hijos = hijosDe.filter(h => claves.has(compacto(h.padre_rp)))
+      .concat(fuera.filter(h => !hijosDe.some(x => String(x.rp).toUpperCase() === String(h.rp).toUpperCase())));
     const delAnio = hijos.filter(h => String(h.fecha_nac || "").startsWith(anio));
     const serv = servicios.filter(s => claves.has(compacto(s.toro_natural)) || claves.has(compacto(s.semen_iatf)));
     const temporadas = [...new Set(serv.map(s => s.temporada).filter(Boolean))].sort();
@@ -84,7 +89,7 @@ function toros(db, opciones = {}) {
       padre: t.padre_rp, madre: t.madre_rp,
       peso_actual: t.peso_actual, ultima_pesada: t.ultima_pesada, dias_sin_pesar: t.ultima_pesada ? dias(t.ultima_pesada, hoy) : null,
       ce: medCE ? medCE.valor : null, fecha_ce: medCE ? medCE.fecha : null,
-      hijos: hijos.length, hijos_anio: delAnio.length,
+      hijos: hijos.length, hijos_anio: delAnio.length, hijos_otros_campos: fuera.length || undefined,
       machos: hijos.filter(h => String(h.sexo || "").toUpperCase().startsWith("M")).length,
       hembras: hijos.filter(h => String(h.sexo || "").toUpperCase().startsWith("H")).length,
       pn_prom_hijos: prom(hijos.map(h => h.pn).filter(x => x > 0)),

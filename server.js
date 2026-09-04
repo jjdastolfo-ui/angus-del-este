@@ -109,8 +109,29 @@ const campoDe = req => { const k = req.query.campo || (req.body && req.body.camp
 // Las empresas se arman con los campos; se crean después de getDB porque lo usan.
 let empresas;
 const empresasDe = () => empresas || (empresas = empresasMod.crear({ CAMPOS, getDB, plantelMod, animalesMod, destinosMod, finanzasMod }));
+// Los totales de la empresa cuentan los hijos que están en los otros campos.
+const conCruce = () => { const em = empresasDe(); em.criasFuera = criasFueraDe; em.hijosFuera = hijosFueraDe; return em; };
 let vinculos;
 const vinculosDe = () => vinculos || (vinculos = vinculosMod.crear({ CAMPOS, getDB, empresasDe }));
+// Los hijos de cada vaca que están en los otros campos de la empresa, listos
+// para que plantel.js los cuente como partos suyos.
+const { compacto } = animalesMod;
+function criasFueraDe(campoKey) {
+  try {
+    const mapa = vinculosDe().mapaCriasFuera(campoKey);
+    if (!mapa.size) return undefined;
+    return rp => mapa.get(compacto(rp)) || [];
+  } catch (e) { return undefined; }
+}
+const opcionesPlantel = (campoKey, extra) => ({ criasFuera: criasFueraDe(campoKey), ...(extra || {}) });
+// Lo mismo para los toros: los hijos que tuvieron sirviendo en otro campo.
+function hijosFueraDe(campoKey) {
+  try {
+    const mapa = vinculosDe().mapaCriasFuera(campoKey, { relacion: "padre" });
+    if (!mapa.size) return undefined;
+    return rp => mapa.get(compacto(rp)) || [];
+  } catch (e) { return undefined; }
+}
 
 function crearTablas(db) {
   db.exec(`
@@ -162,7 +183,7 @@ function crearTablas(db) {
 // Vive en bot.js. Acá sólo se crea con lo que necesita del servidor.
 // guardarTablero está definido más abajo; como es una declaración de función,
 // ya existe cuando se llega acá.
-const bot = botMod.crear({ plantelMod, animalesMod, destinosMod, exportarMod, relevarMod, adjuntosMod, finanzasMod, guardarTablero, registrarSalida, CAMPOS, empresas: empresasDe, vinculos: vinculosDe });
+const bot = botMod.crear({ plantelMod, animalesMod, destinosMod, exportarMod, relevarMod, adjuntosMod, finanzasMod, guardarTablero, registrarSalida, CAMPOS, empresas: empresasDe, vinculos: vinculosDe, criasFuera: criasFueraDe, hijosFuera: hijosFueraDe });
 const MODELO = bot.modelo;
 
 // ── TABLEROS QUE ARMA EL BOT ─────────────────────────────────────────────────
@@ -315,7 +336,7 @@ app.get("/api/campos", (req, res) => {
 
 // Todo el plantel con los datos de cada vaca.
 app.get("/api/plantel", (req, res) => {
-  try { res.json(plantelMod.plantel(dbDe(req), { anio: req.query.anio })); }
+  try { res.json(plantelMod.plantel(dbDe(req), opcionesPlantel(campoDe(req), { anio: req.query.anio }))); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -326,7 +347,7 @@ app.get("/api/ficha/:rp", (req, res) => {
   try {
     const general = animalesMod.ficha(db, req.params.rp);
     if (!general.ok) return res.status(404).json(general);
-    const vientre = general.es_vientre ? plantelMod.ficha(db, general.rp) : { ok: false };
+    const vientre = general.es_vientre ? plantelMod.ficha(db, general.rp, opcionesPlantel(campoDe(req))) : { ok: false };
     const f = vientre.ok ? { ...general, ...vientre, general: true, vientre: true } : { ...general, vientre: false };
     // Lo que vive en otros campos de la misma empresa: la madre, el padre, los hijos.
     const campoKey = campoDe(req);
@@ -393,7 +414,8 @@ app.get("/api/lote/:id/animales", (req, res) => {
 
 // Los toros del campo, con lo que dicen de ellos sus hijos.
 app.get("/api/toros", (req, res) => {
-  try { res.json(animalesMod.toros(dbDe(req), { estado: req.query.estado, anio: req.query.anio })); }
+  const k = campoDe(req);
+  try { res.json(animalesMod.toros(getDB(k), { estado: req.query.estado, anio: req.query.anio, hijosFuera: hijosFueraDe(k) })); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -418,6 +440,7 @@ function opcionesExport(req) {
   const rps = b.rps || (q.rps ? String(q.rps).split(",") : null);
   const columnas = b.columnas || (q.columnas ? String(q.columnas).split(",") : null);
   return { campoNombre: (CAMPOS[campoKey] || {}).nombre || "", rps, columnas, filtro: b.filtro || q.filtro,
+    criasFuera: criasFueraDe(campoKey), hijosFuera: hijosFueraDe(campoKey),
     orden: b.orden || (q.orden ? { col: q.orden, desc: q.desc === "1" } : null), anio: q.anio || b.anio,
     estado: q.estado || b.estado, temporada: q.temporada || b.temporada, sep: q.sep || b.sep,
     volver: "/" + (campoKey !== CAMPO_DEFAULT ? `?campo=${campoKey}` : "") };
@@ -530,8 +553,8 @@ app.post("/api/planilla", (req, res) => {
 // ── DESTINOS ─────────────────────────────────────────────────────────────────
 // Para mostrar cada destino con los datos del animal: las vacas con lo que
 // calcula el plantel, los toros con lo suyo (peso, hijos, edad).
-function filasParaDestinos(db) {
-  const vacas = plantelMod.plantel(db, { incluirDestinados: true }).filas;
+function filasParaDestinos(db, campoKey) {
+  const vacas = plantelMod.plantel(db, opcionesPlantel(campoKey, { incluirDestinados: true })).filas;
   const toros = animalesMod.toros(db, { incluirDestinados: true }).filas.map(t => ({
     rp: t.rp, categoria: t.categoria, pelo: t.pelo, edad_meses: t.edad_meses, peso_adulto: t.peso_actual,
     partos: t.hijos, destete_prom: t.destete_prom_hijos, eficiencia: null, ipp: null, estado: t.estado, bloque: null }));
@@ -544,7 +567,7 @@ app.get("/api/destinos", (req, res) => {
   if (!destinosMod) return res.status(503).json({ error: "Módulo no disponible" });
   const db = dbDe(req);
   try {
-    res.json(destinosMod.listar(db, filasParaDestinos(db), { temporada: req.query.temporada }));
+    res.json(destinosMod.listar(db, filasParaDestinos(db, campoDe(req)), { temporada: req.query.temporada }));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -975,7 +998,7 @@ app.get("/api/buscar-empresa", (req, res) => {
 app.get("/api/empresas", (req, res) => res.json(empresasDe().lista()));
 app.get("/api/empresa/resumen", (req, res) => {
   const key = req.query.empresa || empresasDe().empresaDe(campoDe(req)).key;
-  try { res.json(empresasDe().resumen(key)); } catch (e) { res.status(400).json({ error: e.message }); }
+  try { res.json(conCruce().resumen(key)); } catch (e) { res.status(400).json({ error: e.message }); }
 });
 // Traslados entre campos de la misma empresa: { rps, desde, hasta, fecha?, motivo?, simular? }
 app.post("/api/traslados", (req, res) => {

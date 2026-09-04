@@ -43,8 +43,12 @@ function configurar(CAMPOS) {
   return empresas;
 }
 
-function crear({ CAMPOS, getDB, plantelMod, animalesMod, destinosMod, finanzasMod }) {
+function crear({ CAMPOS, getDB, plantelMod, animalesMod, destinosMod, finanzasMod, criasFuera, hijosFuera }) {
   const empresas = configurar(CAMPOS);
+  // Cuando el servidor las provee, los totales cuentan también los hijos que
+  // cada animal tiene en los otros campos.
+  const cruceCrias = k => { try { return (api.criasFuera || criasFuera) ? (api.criasFuera || criasFuera)(k) : undefined; } catch (e) { return undefined; } };
+  const cruceHijos = k => { try { return (api.hijosFuera || hijosFuera) ? (api.hijosFuera || hijosFuera)(k) : undefined; } catch (e) { return undefined; } };
   const empresaDe = campoKey => empresas[(CAMPOS[campoKey] || {}).empresa] || empresas[Object.keys(empresas)[0]];
   const camposDe = empresaKey => (empresas[empresaKey] || { campos: [] }).campos.map(c => c.key);
   const finanzasDe = campoKey => empresaDe(campoKey).finanzas;
@@ -56,9 +60,9 @@ function crear({ CAMPOS, getDB, plantelMod, animalesMod, destinosMod, finanzasMo
     const campos = e.campos.map(c => {
       try {
         const db = getDB(c.key);
-        const pl = plantelMod.plantel(db);
+        const pl = plantelMod.plantel(db, { criasFuera: cruceCrias(c.key) });
         const R = pl.resumen;
-        const toros = animalesMod.toros(db).resumen;
+        const toros = animalesMod.toros(db, { hijosFuera: cruceHijos(c.key) }).resumen;
         const term = animalesMod.terminacion(db).resumen;
         const activos = db.prepare("SELECT COUNT(*) n FROM animales WHERE upper(COALESCE(estado,'ACTIVO'))='ACTIVO'").get().n;
         let marcados = 0; try { marcados = destinosMod.destinadosASalir(db).size; } catch (x) {}
@@ -154,7 +158,8 @@ function crear({ CAMPOS, getDB, plantelMod, animalesMod, destinosMod, finanzasMo
 
   const lista = () => Object.values(empresas).map(e => ({ key: e.key, nombre: e.nombre, razon_social: e.razon_social, campos: e.campos, finanzas: !!e.finanzas.url, finanzas_nombre: e.finanzas.nombre }));
 
-  return { empresas, empresaDe, camposDe, finanzasDe, resumen, rodeoResumen, trasladar, lista };
+  const api = { empresas, empresaDe, camposDe, finanzasDe, resumen, rodeoResumen, trasladar, lista };
+  return api;
 }
 
 module.exports = { configurar, crear };

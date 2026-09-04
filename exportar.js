@@ -160,14 +160,14 @@ function datos(db, mods, clave, opciones = {}) {
 
   switch (clave) {
     case "plantel": case "fallos": {
-      const p = plantelMod.plantel(db, { anio: opciones.anio });
+      const p = plantelMod.plantel(db, { anio: opciones.anio, criasFuera: opciones.criasFuera });
       let filas = p.filas.map(f => ({ ...f, notas_texto: (f.notas || []).map(n => `${fechaAr(n.fecha)} ${n.texto}`).join(" · ") || null,
         se_atrasa: f.se_atrasa ? "sí" : null }));
       if (clave === "fallos") filas = filas.filter(f => f.estado === "FALLÓ");
       return { filas, subtitulo: `Parición ${p.anio_paricion} · ${filas.length} vientres` };
     }
     case "toros": {
-      const t = animalesMod.toros(db, { estado: opciones.estado || "ACTIVO", anio: opciones.anio });
+      const t = animalesMod.toros(db, { estado: opciones.estado || "ACTIVO", anio: opciones.anio, hijosFuera: opciones.hijosFuera });
       return { filas: t.filas, subtitulo: `${t.resumen.total} toros · ${t.resumen.hijos_totales} hijos registrados` };
     }
     case "animales": {
@@ -175,7 +175,7 @@ function datos(db, mods, clave, opciones = {}) {
       return { filas, subtitulo: `${filas.length} animales ${String(opciones.estado || "activos").toLowerCase()}` };
     }
     case "nacimientos": {
-      const p = plantelMod.plantel(db, { anio: opciones.anio });
+      const p = plantelMod.plantel(db, { anio: opciones.anio, criasFuera: opciones.criasFuera });
       const anio = opciones.anio || p.anio_paricion;
       const filas = conSexo(animalesMod.listar(db, { estado: "TODOS" })
         .filter(a => String(a.fecha_nac || "").startsWith(anio) && a.madre_rp)
@@ -192,8 +192,8 @@ function datos(db, mods, clave, opciones = {}) {
     }
     case "destinos": {
       if (!destinosMod) return { filas: [], subtitulo: "" };
-      const toros = animalesMod.toros(db, { incluirDestinados: true }).filas.map(t => ({ rp: t.rp, categoria: t.categoria, pelo: t.pelo, edad_meses: t.edad_meses, peso_adulto: t.peso_actual, partos: t.hijos, destete_prom: t.destete_prom_hijos, estado: t.estado }));
-      const p = plantelMod.plantel(db, { incluirDestinados: true });
+      const toros = animalesMod.toros(db, { incluirDestinados: true, hijosFuera: opciones.hijosFuera }).filas.map(t => ({ rp: t.rp, categoria: t.categoria, pelo: t.pelo, edad_meses: t.edad_meses, peso_adulto: t.peso_actual, partos: t.hijos, destete_prom: t.destete_prom_hijos, estado: t.estado }));
+      const p = plantelMod.plantel(db, { incluirDestinados: true, criasFuera: opciones.criasFuera });
       const d = destinosMod.listar(db, [...p.filas, ...toros], { temporada: opciones.temporada });
       return { filas: d.filas.map(f => ({ ...f, concretado_texto: f.concretado ? "sí" : "pendiente" })),
         subtitulo: `Temporada ${d.resumen.temporada} · ${d.resumen.marcados} marcados` };
