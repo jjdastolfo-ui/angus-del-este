@@ -664,6 +664,23 @@ app.get("/adjuntos/:id/:nombre?", (req, res) => {
   res.send(a.bytes);
 });
 
+// Diagnóstico de WhatsApp: a qué campo y con qué cuenta contesta cada número.
+//   /api/whatsapp?to=+5491133334444  → dice qué pasaría con un mensaje a ese número
+app.get("/api/whatsapp", (req, res) => {
+  const lista = numerosWhatsApp().map(n => ({ nombre: n.nombre, termina_en: n.numero.slice(-4), campo: n.campo,
+    campo_nombre: (CAMPOS[n.campo] || {}).nombre, empresa: empresasDe().empresaDe(n.campo).nombre,
+    cuenta_twilio: n.sid ? n.sid.slice(0, 6) + "…" + n.sid.slice(-4) : "FALTA" }));
+  const out = { numeros: lista, permitidos: WA_PERMITIDOS.length ? WA_PERMITIDOS.length + " números autorizados" : "cualquiera puede escribir",
+    por_remitente: WA_CAMPOS };
+  if (req.query.to) {
+    const n = numeroDe(req.query.to);
+    out.prueba = { escriben_a: req.query.to, reconocido: !n.desconocido, numero: n.nombre, campo: n.campo,
+      campo_nombre: (CAMPOS[n.campo] || {}).nombre, empresa: empresasDe().empresaDe(n.campo).nombre,
+      cuenta_twilio: n.sid ? n.sid.slice(0, 6) + "…" + n.sid.slice(-4) : "FALTA" };
+  }
+  res.json(out);
+});
+
 // Cuánto sale tener el bot andando (tokens y dólares estimados).
 app.get("/api/uso", (req, res) => {
   try { res.json(bot.uso(dbDe(req), { desde: req.query.desde, hasta: req.query.hasta })); }
@@ -721,8 +738,13 @@ function numerosWhatsApp() {
 function numeroDe(to) {
   const d = soloDigitos(to);
   const lista = numerosWhatsApp();
-  return lista.find(n => n.numero && d && (n.numero === d || d.endsWith(n.numero) || n.numero.endsWith(d))) || lista[0] ||
-    { nombre: "principal", numero: d, sid: process.env.TWILIO_SID || process.env.TWILIO_ACCOUNT_SID || null, token: process.env.TWILIO_TOKEN || process.env.TWILIO_AUTH_TOKEN || null, campo: CAMPO_DEFAULT };
+  const hallado = lista.find(n => n.numero && d && (n.numero === d || d.endsWith(n.numero) || n.numero.endsWith(d)));
+  if (hallado) return hallado;
+  // Con un solo número configurado, es ése. Con varios, no se adivina: contestar
+  // por el campo equivocado es peor que decir que el número no está configurado.
+  if (lista.length === 1) return lista[0];
+  return { nombre: "desconocido", numero: d, desconocido: true, sid: (lista[0] || {}).sid || process.env.TWILIO_SID || process.env.TWILIO_ACCOUNT_SID || null,
+    token: (lista[0] || {}).token || process.env.TWILIO_TOKEN || process.env.TWILIO_AUTH_TOKEN || null, campo: CAMPO_DEFAULT };
 }
 function clienteTwilio(cuenta) {
   const c = cuenta || numeroDe("");
@@ -788,7 +810,15 @@ app.post("/webhook", async (req, res) => {
   const campoKey = CAMPOS[WA_CAMPOS[numero]] ? WA_CAMPOS[numero] : cuenta.campo;
   const db = getDB(campoKey);
   const twilio = clienteTwilio(cuenta);
-  console.log(`whatsapp: ${de} → ${a} (${cuenta.nombre}) · campo ${campoKey}`);
+  const emp = empresasDe().empresaDe(campoKey);
+  console.log(`whatsapp: ${de} → ${a} (${cuenta.nombre}) · campo ${campoKey} · empresa ${emp.nombre}`);
+  if (cuenta.desconocido) {
+    const conocidos = numerosWhatsApp().map(n => `${n.nombre} (…${n.numero.slice(-4)} → ${(CAMPOS[n.campo] || {}).nombre || n.campo})`).join(", ");
+    console.error(`whatsapp: el número ${a} no está configurado. Configurados: ${conocidos}`);
+    if (twilio) { try { await twilio.messages.create({ from: a, to: de,
+      body: `Este número (…${soloDigitos(a).slice(-4)}) todavía no está asignado a un campo, así que no sé de cuál contestarte. Falta agregarlo en el sistema. Configurados hoy: ${conocidos}.` }); } catch (x) {} }
+    return;
+  }
 
   // Si tarda, un aviso para que no parezca que no llegó.
   let respondido = false;
