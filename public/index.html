@@ -370,7 +370,7 @@ const VISTAS = {
     {k:'categoria',t:'Categoría',cls:'mut'},
     {k:'edad_meses',t:'Edad (m)',num:1},
     {k:'peso_adulto',t:'P. adulto',num:1},
-    {k:'partos',t:'Partos',num:1},
+    {k:'partos',t:'Partos',num:1,fmt:(v,f)=>f.hijos_otros_campos?(v+' <span class="mut" title="incluye '+f.hijos_otros_campos+' de otros campos">*</span>'):(v==null?'—':v)},
     {k:'pn_prom',t:'PN prom',num:1},
     {k:'destete_prom',t:'Destete prom',num:1},
     {k:'eficiencia',t:'Efic. %',num:1,fmt:v=>v==null?'—':`<span class="${v>=55?'bi':v<45?'al':''}">${v}%</span>`},
@@ -379,7 +379,7 @@ const VISTAS = {
     {k:'servicio',t:'Servicio',cls:'mut',oculta:1,fmt:v=>fec(v)||'—'},
     {k:'padre_servicio',t:'Padre servicio',cls:'mut',oculta:1},
     {k:'fpp',t:'F. prob. parto',cls:'mut',oculta:1,fmt:v=>fec(v)||'—'},
-    {k:'ternero',t:'Ternero',fmt:(v,f)=>v?esc(v):(f.estado==='PREÑADA'?'<span class="mut">por parir</span>':'<span class="mut">—</span>')},
+    {k:'ternero',t:'Ternero',fmt:(v,f)=>v?(esc(v)+(f.ternero_campo_nombre?' <span class="tag t-cola">'+esc(f.ternero_campo_nombre)+'</span>':'')):(f.estado==='PREÑADA'?'<span class="mut">por parir</span>':'<span class="mut">—</span>')},
     {k:'parto',t:'Parto',cls:'mut',oculta:1,fmt:v=>fec(v)||'—'},
     {k:'peso_nac',t:'PN ternero',num:1,oculta:1},
     {k:'tacto',t:'Tacto',cls:'mut',fmt:v=>esc(String(v||'').replace(/PREÑADA_?/,''))||'—'},
@@ -395,7 +395,7 @@ const VISTAS = {
     {k:'peso_actual',t:'Peso',num:1},
     {k:'ultima_pesada',t:'Última pesada',cls:'mut',fmt:(v,f)=>v?fec(v)+(f.dias_sin_pesar>180?` <span class="al">+${f.dias_sin_pesar}d</span>`:''):'<span class="al">nunca</span>'},
     {k:'ce',t:'CE',num:1},
-    {k:'hijos',t:'Hijos',num:1,fmt:v=>v?`<b>${v}</b>`:'<span class="mut">0</span>'},
+    {k:'hijos',t:'Hijos',num:1,fmt:(v,f)=>!v?'<span class="mut">0</span>':('<b>'+v+'</b>'+(f.hijos_otros_campos?' <span class="mut" title="incluye '+f.hijos_otros_campos+' de otros campos">*</span>':''))},
     {k:'hijos_anio',t:'Hijos del año',num:1},
     {k:'pn_prom_hijos',t:'PN prom hijos',num:1},
     {k:'destete_prom_hijos',t:'Destete prom hijos',num:1,fmt:v=>v==null?'—':`<span class="${v>=220?'bi':v<180?'al':''}">${v}</span>`},
@@ -837,6 +837,13 @@ function pariente(f, rel, valor){
   if(cand && cand.length>1) return esc(valor)+' <span class="mut">en varios campos: '+cand.map(function(c){return esc(c.campo_nombre)}).join(', ')+'</span>';
   return esc(valor)+' <span class="al">no está en la empresa</span>';
 }
+function enlaceCampo(campo, campoNombre, rp){
+  return '<a href="#" onclick="irACampo(\''+esc(campo)+'\',\''+esc(rp)+'\');return false">'+esc(rp)+'</a> <span class="tag t-cola">'+esc(campoNombre||campo)+'</span>';
+}
+// Un ternero que nació en otro campo: link a su ficha allá, con el campo al lado.
+function enlaceCampo(campo, campoNombre, rp){
+  return '<a href="#" onclick="irACampo(&quot;' + esc(campo) + '&quot;,&quot;' + esc(rp) + '&quot;);return false">' + esc(rp) + '</a> <span class="tag t-cola">' + esc(campoNombre || campo) + '</span>';
+}
 function irACampo(campo, rp){
   localStorage.setItem('campo', campo);
   const u=new URL(location.href); u.searchParams.set('campo', campo); u.searchParams.set('ver', rp); location.href=u.toString();
@@ -940,7 +947,7 @@ async function abrirFicha(rp){
           <td>${esc(c.tacto_real||String(c.tacto_manga||'').replace(/PREÑADA_?/,'')||'—')}
             ${c.tacto_corregido?'<span class="corr">corregido</span>':''}</td>
           <td class="mono" style="font-size:12px">${c.parto?fec(c.parto):'—'}</td>
-          <td>${tag(c.bloque)}</td><td>${c.ternero?link(c.ternero):'—'}</td>
+          <td>${tag(c.bloque)}</td><td>${c.ternero ? (c.campo ? enlaceCampo(c.campo, c.campo_nombre, c.ternero) : link(c.ternero)) : '—'}</td>
           <td class="num">${c.peso_nac??'—'}</td><td class="num">${c.destete??'—'}</td>
           <td>${c.sexo||'—'}</td></tr>`).join('')
         : '<tr><td colspan="9" class="vacio">Sin partos registrados</td></tr>'}
