@@ -95,6 +95,21 @@ function resumenRodeo(db, { campoKey, campoNombre, destinosMod } = {}) {
       kg_total: categorias.reduce((s, c) => s + (c.kg_total || 0), 0) } };
 }
 
+// Cargar una transacción. Los financieros nuevos tienen POST /api/transacciones;
+// los viejos reciben lo mismo por /api/ejecutar-accion con la acción
+// "registrar_transaccion". Se intenta la primera y, si esa ruta no existe, la otra.
+async function enviarTransaccion(cuerpo, fin) {
+  try { return await llamar("/api/transacciones", { method: "POST", body: JSON.stringify(cuerpo) }, fin); }
+  catch (e) {
+    if (!/respondió 404/.test(e.message)) throw e;
+    const r = await llamar("/api/ejecutar-accion", { method: "POST", body: JSON.stringify({
+      accion: "registrar_transaccion", fecha: cuerpo.fecha, concepto: cuerpo.concepto, detalle: cuerpo.detalle,
+      ingreso: cuerpo.ingreso || 0, egreso: cuerpo.egreso || 0, proveedor: cuerpo.proveedor || "" }) }, fin);
+    if (r && typeof r.respuesta === "string" && /❌|no pude|falta/i.test(r.respuesta)) throw new Error(r.respuesta.replace(/[❌📝📤📥📁🏪]/g, "").trim());
+    return { ...r, via: "ejecutar-accion" };
+  }
+}
+
 // ── 2. LAS VENTAS VAN AL FINANCIERO ──────────────────────────────────────────
 /**
  * Una venta: uno o varios animales que salieron el mismo día al mismo comprador.
@@ -114,7 +129,7 @@ async function enviarVenta(db, venta, fin) {
   const cuerpo = { fecha: fecha || new Date().toISOString().slice(0, 10), concepto: venta.concepto || "VENTA HACIENDA", detalle: texto,
     ingreso: total, proveedor: comprador || "", fuente: "rodeo", campo: config(fin).campo || undefined };
   try {
-    const r = await llamar("/api/transacciones", { method: "POST", body: JSON.stringify(cuerpo) }, fin);
+    const r = await enviarTransaccion(cuerpo, fin);
     anotar(db, "enviado", "venta", texto, true, r);
     return { ok: true, enviado: true, id_financiero: r && r.id, monto: total, detalle: texto };
   } catch (e) {
@@ -140,7 +155,7 @@ async function registrarMovimiento(db, m, fin) {
   if (m.simular) return { simulado: true, enviado: false, movimiento: cuerpo, mensaje: `Listo para registrar: ${concepto} ${egreso > 0 ? "gasto" : "ingreso"} ${egreso || ingreso}${m.proveedor ? " · " + m.proveedor : ""}. Confirmá y lo mando.` };
   if (!configurado(fin)) { anotar(db, "enviado", "movimiento", cuerpo.detalle, false, "sin financiero"); return { ok: false, enviado: false, motivo: "El financiero no está enlazado para esta empresa" }; }
   try {
-    const r = await llamar("/api/transacciones", { method: "POST", body: JSON.stringify(cuerpo) }, fin);
+    const r = await enviarTransaccion(cuerpo, fin);
     anotar(db, "enviado", "movimiento", `${concepto} ${egreso || ingreso}`, true, r);
     return { ok: true, enviado: true, id_financiero: r && r.id, movimiento: cuerpo, mensaje: `Registrado en el financiero: ${concepto} ${egreso > 0 ? "-" : "+"}${egreso || ingreso}${m.proveedor ? " · " + m.proveedor : ""}` };
   } catch (e) {
@@ -197,4 +212,4 @@ async function pedirSincronizacion(db, campoKey, fin, todosLosCampos) {
   return r;
 }
 
-module.exports = { init, config, configurado, resumenRodeo, enviarVenta, registrarMovimiento, consultar, estado, pedirSincronizacion, setFetch, llamar };
+module.exports = { init, config, configurado, resumenRodeo, enviarVenta, registrarMovimiento, enviarTransaccion, consultar, estado, pedirSincronizacion, setFetch, llamar };
