@@ -69,6 +69,19 @@ function leerJson(nombre, porDefecto) {
 }
 const CAMPOS = leerJson("CAMPOS", { principal: { nombre: "Angus del Este", empresa: "improlux" } });
 if (process.env.EMPRESAS) leerJson("EMPRESAS", null);   // sólo para validar y avisar; empresas.js lo vuelve a leer
+// El portal RODEO manda org=<slug> de la organización. ORGANIZACIONES dice a qué
+// empresa corresponde cada slug: {"cabana-amakaik":"gullo","angus-del-este":"improlux"}.
+// Si no está, se adivina por parecido con el nombre o la clave de la empresa.
+const ORGANIZACIONES = leerJson("ORGANIZACIONES", {});
+function empresaDeOrg(slug) {
+  if (!slug) return null;
+  const em = empresasDe();
+  if (ORGANIZACIONES[slug] && em.empresas[ORGANIZACIONES[slug]]) return ORGANIZACIONES[slug];
+  // Sólo coincidencia exacta con la clave o el nombre de la empresa: adivinar por
+  // parecido se equivoca (una organización "cabana-amakaik" puede ser de otra empresa).
+  const n = String(slug).toLowerCase().replace(/[^a-z0-9]/g, "");
+  return Object.values(em.empresas).find(e => [e.key, e.nombre, e.razon_social].filter(Boolean).some(x => String(x).toLowerCase().replace(/[^a-z0-9]/g, "") === n))?.key || null;
+}
 const CAMPO_DEFAULT = Object.keys(CAMPOS)[0];
 const bases = {};
 
@@ -276,13 +289,16 @@ app.get("/api/campos", (req, res) => {
   if (req.query.empresa) {
     const ek = Object.keys(em.empresas).find(x => x.toLowerCase() === String(req.query.empresa).toLowerCase());
     if (ek) empresaKey = ek; else { empresaKey = em.empresaDe(CAMPO_DEFAULT).key; aviso = `No existe la empresa "${req.query.empresa}"`; }
-  } else if (req.query.de_campo) {
-    // Pidieron un campo: se muestra su empresa. Si la clave no existe, la del campo
-    // por defecto, y se avisa: nunca todos los campos de todas las empresas.
-    empresaKey = em.empresaDe(pedido || CAMPO_DEFAULT).key;
-    if (!pedido) aviso = `No existe el campo "${req.query.de_campo}". Las claves son: ${Object.keys(CAMPOS).join(", ")}`;
+  } else if (req.query.de_campo || req.query.org) {
+    // Pidieron un campo: se muestra su empresa. Si la clave no existe, se intenta con
+    // la organización del portal; si tampoco, la del campo por defecto, y se avisa.
+    const porOrg = pedido ? null : empresaDeOrg(req.query.org);
+    empresaKey = pedido ? em.empresaDe(pedido).key : porOrg || em.empresaDe(CAMPO_DEFAULT).key;
+    if (!pedido && req.query.de_campo && !porOrg) aviso = `No existe el campo "${req.query.de_campo}". Las claves son: ${Object.keys(CAMPOS).join(", ")}`;
+    if (!pedido && !req.query.de_campo && !porOrg && req.query.org) aviso = `No sé a qué empresa corresponde la organización "${req.query.org}"`;
   }
-  const entradas = Object.entries(CAMPOS).filter(([key]) => !empresaKey || em.empresaDe(key).key === empresaKey);
+  let entradas = Object.entries(CAMPOS).filter(([key]) => !empresaKey || em.empresaDe(key).key === empresaKey);
+  if (!entradas.length) { entradas = Object.entries(CAMPOS).filter(([key]) => em.empresaDe(key).key === em.empresaDe(CAMPO_DEFAULT).key); aviso = aviso || `La empresa "${empresaKey}" no tiene campos`; }
   if (aviso) res.setHeader("X-Aviso", encodeURIComponent(aviso));
   res.json(entradas.map(([key, c]) => {
     let n = 0;
