@@ -44,6 +44,7 @@ const botMod = require("./bot.js");             // el bot: Claude con la base en
 const adjuntosMod = require("./adjuntos.js");   // fotos, PDF, Excel, CSV, Word que le mandan al bot
 const finanzasMod = require("./finanzas.js");   // el enlace con IMPROLUX / VIDELA
 const empresasMod = require("./empresas.js");   // una empresa: sus campos y su financiero
+const vinculosMod = require("./vinculos.js");   // cruzar madres, padres e hijos entre campos
 const mods = () => ({ plantelMod, animalesMod, destinosMod });
 
 // ── CAMPOS ───────────────────────────────────────────────────────────────────
@@ -99,6 +100,7 @@ function getDB(key) {
   botMod.init(db);
   adjuntosMod.init(db);
   finanzasMod.init(db);
+  vinculosMod.init(db);
   bases[k] = db;
   return db;
 }
@@ -107,6 +109,8 @@ const campoDe = req => { const k = req.query.campo || (req.body && req.body.camp
 // Las empresas se arman con los campos; se crean después de getDB porque lo usan.
 let empresas;
 const empresasDe = () => empresas || (empresas = empresasMod.crear({ CAMPOS, getDB, plantelMod, animalesMod, destinosMod, finanzasMod }));
+let vinculos;
+const vinculosDe = () => vinculos || (vinculos = vinculosMod.crear({ CAMPOS, getDB, empresasDe }));
 
 function crearTablas(db) {
   db.exec(`
@@ -158,7 +162,7 @@ function crearTablas(db) {
 // Vive en bot.js. Acá sólo se crea con lo que necesita del servidor.
 // guardarTablero está definido más abajo; como es una declaración de función,
 // ya existe cuando se llega acá.
-const bot = botMod.crear({ plantelMod, animalesMod, destinosMod, exportarMod, relevarMod, adjuntosMod, finanzasMod, guardarTablero, registrarSalida, CAMPOS, empresas: empresasDe });
+const bot = botMod.crear({ plantelMod, animalesMod, destinosMod, exportarMod, relevarMod, adjuntosMod, finanzasMod, guardarTablero, registrarSalida, CAMPOS, empresas: empresasDe, vinculos: vinculosDe });
 const MODELO = bot.modelo;
 
 // ── TABLEROS QUE ARMA EL BOT ─────────────────────────────────────────────────
@@ -323,7 +327,27 @@ app.get("/api/ficha/:rp", (req, res) => {
     const general = animalesMod.ficha(db, req.params.rp);
     if (!general.ok) return res.status(404).json(general);
     const vientre = general.es_vientre ? plantelMod.ficha(db, general.rp) : { ok: false };
-    res.json(vientre.ok ? { ...general, ...vientre, general: true, vientre: true } : { ...general, vientre: false });
+    const f = vientre.ok ? { ...general, ...vientre, general: true, vientre: true } : { ...general, vientre: false };
+    // Lo que vive en otros campos de la misma empresa: la madre, el padre, los hijos.
+    const campoKey = campoDe(req);
+    try {
+      const v = vinculosDe();
+      const fam = v.familiaFuera(campoKey, { madre_campo: general.madre_campo, padre_campo: general.padre_campo, madre_rp: general.madre, padre_rp: general.padre });
+      const hf = v.hijosFuera(campoKey, general.rp, general.nombre);
+      if (fam.madre) f.madre_fuera = fam.madre;
+      if (fam.padre) f.padre_fuera = fam.padre;
+      if (hf.length) f.hijos_fuera = hf;
+      // Si la madre no está acá y no tiene campo anotado, decir dónde podría estar.
+      if (general.madre && !general.madre_existe && !general.madre_campo) {
+        const cand = v.buscarEnEmpresa(campoKey, general.madre, { excluir: campoKey });
+        if (cand.length) f.madre_candidatos = cand;
+      }
+      if (general.padre && !general.padre_existe && !general.padre_campo) {
+        const cand = v.buscarEnEmpresa(campoKey, general.padre, { excluir: campoKey });
+        if (cand.length) f.padre_candidatos = cand;
+      }
+    } catch (e) {}
+    res.json(f);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -914,6 +938,39 @@ app.post("/api/finanzas/sincronizar", async (req, res) => {
   try { res.json(await finanzasMod.pedirSincronizacion(getDB(k), k, e.finanzas, e.campos.map(c => c.key))); } catch (e) { res.status(502).json({ error: e.message }); }
 });
 
+// ── VÍNCULOS ENTRE CAMPOS ────────────────────────────────────────────────────
+// Qué animales apuntan a una madre o un padre que no está en su campo, dónde
+// está realmente cada uno, y el arreglo.
+app.get("/api/vinculos", (req, res) => {
+  try {
+    const k = campoDe(req);
+    res.json(req.query.empresa === "1" || req.query.todos === "1"
+      ? vinculosDe().revisarEmpresa(k, { estado: req.query.estado, limite: Number(req.query.limite) || undefined })
+      : vinculosDe().revisar(k, { estado: req.query.estado, limite: Number(req.query.limite) || undefined, fresco: true }));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Arreglar: sin filas, todo lo inequívoco. { filas: [{rp, relacion, campo, rp_madre}], simular }
+app.post("/api/vinculos", (req, res) => {
+  try { res.json(vinculosDe().aplicar(campoDe(req), req.body || {})); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+// Padres que no son animales del campo (semen, toro prestado): se anotan y dejan de figurar.
+app.get("/api/vinculos/externos", (req, res) => {
+  try { res.json(vinculosDe().externos(campoDe(req))); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post("/api/vinculos/externos", (req, res) => {
+  try { res.json(vinculosDe().marcarExternos(campoDe(req), req.body || {})); } catch (e) { res.status(400).json({ error: e.message }); }
+});
+app.delete("/api/vinculos/externos/:valor", (req, res) => {
+  try { res.json(vinculosDe().olvidarExterno(campoDe(req), decodeURIComponent(req.params.valor))); } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+// Buscar un animal en todos los campos de la empresa.
+app.get("/api/buscar-empresa", (req, res) => {
+  try { res.json(vinculosDe().buscarEnEmpresa(campoDe(req), req.query.q, { excluir: req.query.excluir_propio === "1" ? campoDe(req) : null })); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── EMPRESAS ─────────────────────────────────────────────────────────────────
 app.get("/api/empresas", (req, res) => res.json(empresasDe().lista()));
 app.get("/api/empresa/resumen", (req, res) => {
@@ -996,7 +1053,7 @@ app.get("/", (req, res) => {
 });
 
 // Para poder probar las funciones sin levantar el servidor.
-module.exports = { app, getDB, bot, guardarTablero, registrarSalida, empresasDe, numerosWhatsApp, numeroDe, CAMPOS, CAMPO_DEFAULT, partirMensaje, absolutizar };
+module.exports = { app, getDB, bot, guardarTablero, registrarSalida, empresasDe, vinculosDe, numerosWhatsApp, numeroDe, CAMPOS, CAMPO_DEFAULT, partirMensaje, absolutizar };
 
 if (require.main === module) app.listen(PORT, () => {
   console.log(`${VERSION} en el puerto ${PORT} · modelo ${MODELO} · esfuerzo ${bot.esfuerzo}`);

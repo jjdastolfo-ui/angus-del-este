@@ -39,7 +39,7 @@ Abre en http://localhost:3001. Sin clave de API el tablero anda igual; sólo el 
 | `DB_DIR` | dónde vive la base. En Railway: `/data`, con un volumen montado ahí |
 | `CAMPOS` | JSON con los campos (ver abajo) |
 | `MODELO` | opcional. Por defecto `claude-opus-5`. Para comparar: `claude-sonnet-5`, `claude-fable-5-1` |
-| `ESFUERZO` | opcional. `high` por defecto; `medium` para abaratar, `xhigh`/`max` para exprimir |
+| `ESFUERZO` | opcional. `medium` por defecto (alcanza para el uso diario). `low` para gastar lo mínimo, `high`/`xhigh`/`max` para preguntas difíciles |
 | `TWILIO_SID` / `TWILIO_TOKEN` (o `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN`) | sólo si se usa WhatsApp |
 | `RESPALDO_CLAVE` (o `CLAVE_BACKUP`) | una clave cualquiera; habilita `/api/respaldo?clave=...` para bajar una copia de la base |
 | `WHATSAPP_PERMITIDOS` | números que pueden hablarle, separados por coma (`5491155551234,5491166665678`). Sin esto, cualquiera |
@@ -70,6 +70,33 @@ qué empresa pertenecen (`empresa` en `CAMPOS`); la empresa se describe en
 
 Si `EMPRESAS` no está, se arma sola con las empresas que nombran los campos y
 usa `FINANZAS_URL` / `FINANZAS_CAMPO` globales.
+
+### Animales que se cruzan entre campos
+
+Los campos de una empresa comparten animales: una vaca queda en uno y su ternero
+se cría en otro, un toro sirve en los tres. Antes, ese ternero apuntaba a una
+madre que no estaba en su base y el sistema decía "no la encuentro".
+
+En la pestaña **Empresa**, "Madres y padres que están en otro campo" revisa todos
+los campos y clasifica cada caso:
+
+| Qué encontró | Qué hace |
+|---|---|
+| El RP está escrito distinto ("27" por "027") | lo corrige contra el propio campo |
+| El padre está por nombre ("Hércules") y el toro está acá | lo pasa al RP |
+| La madre o el padre están en otro campo de la empresa | anota el vínculo (`madre_campo`) sin mover al animal |
+| Aparece en más de un lugar | lo deja marcado: hay que elegir a mano, desde la ficha |
+| Es semen o un toro de afuera ("KARE 16", "IVAR 4") | lo reconoce como externo, no como error |
+| No está en ningún campo | lo lista para cargarlo |
+
+Con el vínculo anotado, la ficha del ternero muestra a la madre con su campo y un
+link para ir; y en la ficha de la madre aparecen los hijos que tiene en los otros
+campos. La búsqueda entiende también "46 VERDE" (caravana y color).
+
+Rutas: `GET /api/vinculos` (con `?empresa=1` para todos los campos),
+`POST /api/vinculos` para arreglar, `GET /api/buscar-empresa?q=` para encontrar un
+RP en cualquier campo, y `POST /api/vinculos/externos` para anotar el semen.
+El bot lo hace con la herramienta `vinculos`.
 
 Con más de un campo aparece la pestaña **Empresa**: cabezas, vientres, parición,
 toros y terminación por campo, el stock consolidado por categoría (el que lee el
@@ -197,6 +224,27 @@ salen mucho más baratas.
 Sabe de ganadería sin que nadie le cargue parámetros: la gestación son 283
 días, una vaca desteta un ternero por año, la eficiencia es el destete sobre
 el peso de la madre. El calendario del campo lo deduce de los propios registros.
+
+## Cuánto sale el bot
+
+Cada respuesta guarda sus tokens y el costo estimado en la tabla `uso_bot`. En el
+tablero, pestaña **Archivos**, la primera caja muestra lo de hoy, lo del mes, el
+promedio por consulta y cuánto ahorró el caché, con el detalle por día y por canal
+(tablero / WhatsApp). También en `GET /api/uso?desde=&hasta=`.
+
+Para gastar menos, dos perillas que se cambian en Railway sin subir código:
+
+| Configuración | Costo relativo | Cuándo |
+|---|---|---|
+| `MODELO=claude-opus-5` + `ESFUERZO=high` | 100% | preguntas difíciles, auditorías de datos |
+| `MODELO=claude-opus-5` + `ESFUERZO=medium` (por defecto) | ~50% | el uso diario |
+| `MODELO=claude-opus-5` + `ESFUERZO=low` | ~30% | consultas simples, mucho volumen |
+| `MODELO=claude-sonnet-5` + `ESFUERZO=high` | ~40% | alternativa: modelo más barato pensando a fondo |
+
+Después de cambiar, `npm run evaluar` mide si la calidad se mantuvo.
+
+Es una estimación con los precios de lista del modelo configurado. La cifra que se
+cobra está en la consola de Anthropic, en Settings → Usage.
 
 ## Medir al bot
 
@@ -337,6 +385,17 @@ campo va a la base del campo; lo de plata, al financiero de esa empresa
 (herramientas `finanzas` para leer y `finanzas_registrar` para cargar un gasto o un
 ingreso; las ventas de hacienda van con `destinar salida` y se mandan solas). Todos
 los números apuntan al mismo webhook: `https://TU-APP/webhook`.
+
+Para ver a qué campo contesta cada número, sin mandar mensajes:
+
+```
+GET /api/whatsapp                      → todos los números, su campo y su empresa
+GET /api/whatsapp?to=+5491133334444    → qué pasaría con un mensaje a ese número
+```
+
+Si el número al que escriben no está configurado y hay varios, el bot **no adivina**:
+avisa que ese número no está asignado a un campo y no contesta con datos de otra
+empresa.
 
 El sandbox pide volver a mandar `join …` cada 72 horas y sólo desde números
 que se unieron. Para producción (número propio, sin códigos) se aprueba un

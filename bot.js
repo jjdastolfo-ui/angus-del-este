@@ -276,6 +276,26 @@ const HERRAMIENTAS = [
       fecha: { type: "string" }, motivo: { type: "string" }, simular: { type: "boolean" } }, required: ["rps", "hasta"] }
   },
   {
+    name: "vinculos",
+    description: "Cruza los campos de la empresa: encuentra a las madres y los padres que no están en este campo " +
+      "sino en otro, y arregla el vínculo. Un ternero puede estar acá y su madre en otro campo; el sistema " +
+      "no la encontraba y quedaba huérfano. Con accion=revisar te dice cuántos hay y cuáles: los que tienen el " +
+      "RP escrito distinto, los que están en otro campo, los ambiguos (más de un candidato) y los que no existen " +
+      "en ninguna parte. Con accion=arreglar deja anotado el vínculo de todos los casos claros; los ambiguos no " +
+      "los toca (esos se resuelven de a uno, diciendo campo y RP). Con accion=buscar encontrás un RP en todos los campos. " +
+      "Ojo: muchos padres que \"no existen\" son semen de IATF o toros prestados (KARE 16, IVAR 4): eso no es un error. " +
+      "El revisar los marca como probable_externo; con accion=externos se anotan y dejan de figurar.",
+    input_schema: { type: "object", properties: {
+      accion: { type: "string", enum: ["revisar", "arreglar", "buscar", "externos"], description: "revisar (default) · arreglar · buscar · externos (marcar padres que son semen o toros de afuera, para que dejen de figurar como error)" },
+      valores: { type: "array", items: { type: "string" }, description: "externos: los nombres a marcar. Sin esto, todos los que el sistema detectó como probables." },
+      q: { type: "string", description: "buscar: el RP, nombre o caravana a encontrar en los otros campos." },
+      todos_los_campos: { type: "boolean", description: "revisar: mirar todos los campos de la empresa, no sólo éste." },
+      filas: { type: "array", items: { type: "object" }, description:
+        "arreglar, caso por caso: [{rp: \"el hijo\", relacion: \"madre\"|\"padre\", campo: \"clave del campo donde está\", rp_madre: \"RP real\"}]. " +
+        "Sin filas, arregla todo lo inequívoco." },
+      simular: { type: "boolean", description: "true: mostrar qué haría, sin escribir." } } }
+  },
+  {
     name: "finanzas",
     description: "Lee el sistema financiero (IMPROLUX/VIDELA) si está enlazado: el resumen del mes, las " +
       "transacciones (gastos e ingresos por concepto: SANIDAD, ALIMENTO, VENTA HACIENDA…), el stock valuado " +
@@ -362,6 +382,7 @@ function crear(deps) {
   const adjuntosMod = deps.adjuntosMod || require("./adjuntos.js");
   const finanzasMod = deps.finanzasMod || require("./finanzas.js");
   const empresasDe = typeof deps.empresas === "function" ? deps.empresas : () => deps.empresas || null;
+  const vinculosDe = typeof deps.vinculos === "function" ? deps.vinculos : () => deps.vinculos || null;
   const CAMPOS = deps.CAMPOS || {};
   const modelo = deps.modelo || process.env.MODELO || "claude-opus-5";
   // "medium" alcanza para casi todo lo del campo y sale bastante menos que "high".
@@ -447,6 +468,9 @@ QUÉ HERRAMIENTA PARA QUÉ:
 ATENDÉS LAS DOS COSAS: lo del campo (animales, pesadas, sanidad aplicada, nacimientos) va a la base ganadera; lo de plata (cuánto se gastó, qué se compró, cuánto entró) va al financiero de esta empresa. Un mismo hecho puede ser las dos: "vacuné 80 vacas con ivermectina que compré a 300 dólares" es una aplicación de sanidad (relevar) y un gasto (finanzas_registrar). Hacé las dos y contá las dos. Si el financiero no está enlazado, decilo y cargá igual lo del campo.
 · campos: la empresa entera, campo por campo, cuando preguntan por el total o comparan campos. Vos estás parado en un campo: plantel, ficha y consultar miran sólo éste.
 · trasladar: mover animales a otro campo de la empresa. Simulá primero.
+· vinculos: cuando una madre o un padre no aparecen, antes de decir que no existen fijate si están en otro campo de la empresa. Con accion=buscar encontrás un RP en todos los campos; con revisar ves todos los huérfanos del campo; con arreglar los dejás vinculados.
+
+MADRES Y PADRES DE OTRO CAMPO: los campos de una empresa comparten animales. Un ternero puede estar acá y su madre en otro campo. Si ficha te dice que la madre no existe, NO concluyas que está mal cargada: usá vinculos (buscar) antes. Cuando el vínculo queda anotado, la ficha muestra a la madre con su campo, y en la ficha de la madre aparecen los hijos que tiene en los otros campos.
 · leer_adjunto / importar_adjunto: cuando mandan un archivo. Fotos y PDF los ves directo; planillas y textos llegan resumidos con un id.
 
 ARCHIVOS QUE TE MANDAN: primero decí en una línea qué es y qué tiene (una planilla de pesadas con 40 filas, la foto de una libreta con RP y pesos, un informe del veterinario). Después hacé lo que corresponda:
@@ -552,6 +576,20 @@ ${cal.cortes ? `Bloques de la parición en curso: cabeza hasta ${cal.cortes.CABE
         if (!input.destino) throw new Error("Falta el destino");
         return destinosMod.marcarVarios(db, rps, input.destino, op);
       }
+      case "vinculos": {
+        const v = vinculosDe(); if (!v) throw new Error("Los vínculos entre campos no están disponibles");
+        const k = ctx.campoKey;
+        if (input.accion === "buscar") return { resultados: v.buscarEnEmpresa(k, input.q) };
+        if (input.accion === "arreglar") {
+          if (ctx.soloLectura && !input.simular) throw new Error("Esta sesión es de sólo lectura");
+          return v.aplicar(k, { filas: input.filas, simular: input.simular, usuario });
+        }
+        if (input.accion === "externos") {
+          if (ctx.soloLectura && !input.simular) throw new Error("Esta sesión es de sólo lectura");
+          return v.marcarExternos(k, { valores: input.valores, simular: input.simular });
+        }
+        return input.todos_los_campos ? v.revisarEmpresa(k) : v.revisar(k, { fresco: true });
+      }
       case "finanzas": { const em = empresasDe(); return finanzasMod.consultar(db, input, em && ctx.campoKey ? em.finanzasDe(ctx.campoKey) : undefined); }
       case "finanzas_registrar": {
         if (ctx.soloLectura && !input.simular) throw new Error("Esta sesión es de sólo lectura");
@@ -620,6 +658,8 @@ ${cal.cortes ? `Bloques de la parición en curso: cabeza hasta ${cal.cortes.CABE
     if (nombre === "crear_tablero") return { tipo: "tablero", herramienta: nombre, slug: out.slug, url: out.url };
     if (nombre === "exportar_archivo") return { tipo: "archivo", herramienta: nombre, nombre: out.nombre, url: out.url, filas: out.filas };
     if (nombre === "destinar") return { tipo: "escritura", herramienta: nombre, que: out.mensaje || `destinar ${input.accion || "marcar"}`, cambios: (out.hechos || out.resultados || []).length };
+    if (nombre === "vinculos") return { tipo: (input.accion === "arreglar" && !input.simular) ? "escritura" : "consulta", herramienta: nombre,
+      que: out.mensaje, porque: `vínculos: ${input.accion || "revisar"}`, cambios: out.bien, filas: out.resumen ? out.resumen.total : (out.resultados || []).length };
     if (nombre === "finanzas") return { tipo: "consulta", herramienta: nombre, porque: `finanzas: ${input.consulta || "resumen"}`, filas: out && out.total };
     if (nombre === "finanzas_registrar") return { tipo: input.simular ? "consulta" : "escritura", herramienta: nombre, que: out.mensaje || out.motivo, cambios: out.ok ? 1 : 0 };
     if (nombre === "campos") return { tipo: "consulta", herramienta: nombre, porque: "la empresa entera", filas: out && out.campos && out.campos.length };
@@ -640,6 +680,7 @@ ${cal.cortes ? `Bloques de la parición en curso: cabeza hasta ${cal.cortes.CABE
     if (nombre === "crear_tablero") return `armo el tablero "${input.titulo}"`;
     if (nombre === "exportar_archivo") return `armo el archivo "${input.titulo}"`;
     if (nombre === "destinar") return input.accion === "sacar" ? `le saco el destino a ${(input.rps || []).length} animal(es)` : input.accion === "salida" ? `registro la salida de ${(input.rps || []).length} animal(es)` : `marco ${(input.rps || []).length} animal(es) → ${input.destino}`;
+    if (nombre === "vinculos") return input.accion === "arreglar" ? "arreglo los vínculos entre campos" : input.accion === "buscar" ? `busco "${input.q}" en todos los campos` : "reviso las madres y padres de otros campos";
     if (nombre === "finanzas") return `consulto el financiero (${input.consulta || "resumen"})`;
     if (nombre === "finanzas_registrar") return input.simular ? "preparo el movimiento" : `registro ${input.concepto} en el financiero`;
     if (nombre === "campos") return "miro todos los campos de la empresa";
