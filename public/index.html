@@ -538,6 +538,8 @@ async function cargar(){
     document.getElementById('hSub').textContent =
       `${pl.filas.length} vientres · parición ${pl.anio_paricion} · ${D.animales.length} animales activos`;
     llenarFiltros(); pintar(); if(!document.getElementById('msgs').children.length) cargarConversacion();
+    const verRp = params.get('ver');
+    if(verRp){ setTimeout(function(){ abrirFicha(verRp); }, 300); const u=new URL(location.href); u.searchParams.delete('ver'); history.replaceState(null,'',u.toString()); }
     if(vista==='archivos') pintarArchivos();   // relevar no se redibuja: se perdería lo que se está cargando
   }catch(e){
     document.getElementById('hSub').textContent = e.message;
@@ -825,6 +827,28 @@ document.addEventListener('keydown',e=>{
 
 // ── Ficha ────────────────────────────────────────────────────────────────────
 let fichaActual=null;
+// La madre o el padre: acá, en otro campo de la empresa, o todavía sin vincular.
+function pariente(f, rel, valor){
+  if(!valor) return '<span class="mut">—</span>';
+  const enOtro = f[rel+'_fuera'], cand = f[rel+'_candidatos'];
+  if(f[rel+'_existe']) return '<a href="#" onclick="abrirFicha(\''+esc(valor)+'\');return false">'+esc(valor)+'</a>';
+  if(enOtro) return '<a href="#" onclick="irACampo(\''+esc(enOtro.campo)+'\',\''+esc(enOtro.rp)+'\');return false">'+esc(valor)+'</a> <span class="tag t-cola">'+esc(enOtro.campo_nombre)+'</span>';
+  if(cand && cand.length===1) return esc(valor)+' <button class="btn s g" onclick="vincularUno(\''+esc(f.rp)+'\',\''+rel+'\',\''+esc(cand[0].campo)+'\',\''+esc(cand[0].rp)+'\')">está en '+esc(cand[0].campo_nombre)+': vincular</button>';
+  if(cand && cand.length>1) return esc(valor)+' <span class="mut">en varios campos: '+cand.map(function(c){return esc(c.campo_nombre)}).join(', ')+'</span>';
+  return esc(valor)+' <span class="al">no está en la empresa</span>';
+}
+function irACampo(campo, rp){
+  localStorage.setItem('campo', campo);
+  const u=new URL(location.href); u.searchParams.set('campo', campo); u.searchParams.set('ver', rp); location.href=u.toString();
+}
+async function vincularUno(rp, relacion, campo, rpReal){
+  try{
+    const r=await fetch(urlCampo('/api/vinculos'),{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({filas:[{rp:rp, relacion:relacion, campo:campo, rp_madre:rpReal}]})}).then(x=>x.json());
+    if(r.error) throw new Error(r.error);
+    toast(r.mensaje,5000); abrirFicha(rp);
+  }catch(e){ toast(e.message,5000); }
+}
 function cerrarFicha(){ document.getElementById('ov').classList.remove('on'); }
 async function abrirFicha(rp){
   document.getElementById('ovCard').innerHTML='<div class="cb"><div class="vacio">Cargando…</div></div>';
@@ -889,8 +913,8 @@ async function abrirFicha(rp){
       <div class="fk" style="margin-bottom:22px">
         <div><span>Nacimiento</span><b class="s">${O.nacimiento?fec(O.nacimiento):'—'}</b></div>
         <div><span>Peso al nacer</span><b class="s">${O.peso_nacer??'—'}</b></div>
-        <div><span>Padre</span><b class="s">${f.padre_existe?link(O.padre):esc(O.padre||'—')}</b></div>
-        <div><span>Madre</span><b class="s">${f.madre_existe?link(O.madre):esc(O.madre||'—')}</b></div>
+        <div><span>Padre</span><b class="s">${pariente(f,'padre',O.padre)}</b></div>
+        <div><span>Madre</span><b class="s">${pariente(f,'madre',O.madre)}</b></div>
         <div><span>HBA</span><b class="s">${esc(O.hba||'—')}</b></div>
         <div><span>Chip</span><b class="s">${esc(O.caravana||'—')}</b></div>
         ${f.caravana_control?`<div><span>Caravana control</span><b class="s">${esc(f.caravana_control)}${f.caravana_color?' <span class="mut">'+esc(f.caravana_color)+'</span>':''}</b></div>`:''}
@@ -927,6 +951,7 @@ async function abrirFicha(rp){
       <div class="tw"><table><thead><tr><th>RP</th><th>Nacimiento</th><th>Sexo</th><th>Pelaje</th><th>${String(f.sexo||'').startsWith('M')?'Madre':'Padre'}</th><th class="num">P. nacer</th><th class="num">Destete</th><th>Estado</th></tr></thead>
         <tbody>${hijos.map(h=>`<tr><td class="rp">${link(h.rp)}</td><td class="mut">${fec(h.fecha_nac)||'—'}</td><td>${sexo(h.sexo)}</td><td>${punto(h.pelo)}</td><td>${esc(String(f.sexo||'').startsWith('M')?(h.madre_rp||'—'):(h.padre_rp||'—'))}</td><td class="num">${h.peso_nac??'—'}</td><td class="num">${h.destete??'—'}</td><td>${tag(h.estado||'ACTIVO')}</td></tr>`).join('')}</tbody></table></div>` : ''}
 
+      ${(f.hijos_fuera&&f.hijos_fuera.length)?'<h3 class="s">Hijos en otros campos <span class="mut" style="font-weight:300;letter-spacing:0;text-transform:none">'+f.hijos_fuera.length+'</span></h3><div class="tw"><table><thead><tr><th>RP</th><th>Campo</th><th>Nacimiento</th><th>Sexo</th><th class="num">P. nacer</th><th class="num">Destete</th><th>Estado</th></tr></thead><tbody>'+f.hijos_fuera.map(function(x){return '<tr><td class="rp"><a href="#" onclick="irACampo(\''+esc(x.campo)+'\',\''+esc(x.rp)+'\');return false">'+esc(x.rp)+'</a></td><td><span class="tag t-cola">'+esc(x.campo_nombre)+'</span></td><td class="mut">'+(fec(x.fecha_nac)||'—')+'</td><td>'+sexo(x.sexo)+'</td><td class="num">'+(x.peso_nac==null?'—':x.peso_nac)+'</td><td class="num">'+(x.destete==null?'—':x.destete)+'</td><td>'+tag(x.estado||'ACTIVO')+'</td></tr>'}).join('')+'</tbody></table></div>':''}
       <h3 class="s">Pesadas <span class="mut" style="font-weight:300;letter-spacing:0;text-transform:none">${(f.pesadas||[]).length}</span></h3>
       <div class="tw"><table><thead><tr><th>Fecha</th><th class="num">Peso</th><th>Contexto</th><th class="num">Días</th><th class="num">GDP</th></tr></thead>
         <tbody>${(f.pesadas||[]).length? [...f.pesadas].reverse().map(p=>`<tr><td class="mono" style="font-size:12px">${fec(p.fecha)}</td><td class="num"><b>${p.peso}</b></td><td class="mut">${esc(p.contexto||'')}</td><td class="num">${p.dias??'—'}</td><td class="num ${p.gdp>=0.8?'bi':p.gdp!=null&&p.gdp<0?'al':''}">${p.gdp??'—'}</td></tr>`).join('')
@@ -1148,6 +1173,11 @@ async function pintarEmpresa(){
         <div class="tw"><table><thead><tr><th>Categoría</th><th>Registro</th><th class="num">Plantel</th><th class="num">A la venta</th><th class="num">Total</th><th class="num">Kg prom</th><th class="num">Kg totales</th><th class="num">Sin peso</th></tr></thead>
         <tbody>${st.categorias.map(c=>`<tr><td class="rp">${esc(c.categoria)}</td><td class="mut">${esc(c.registro)}</td><td class="num">${c.plantel}</td><td class="num">${c.venta}</td><td class="num"><b>${c.cantidad}</b></td><td class="num">${n(c.kg_estimado)}</td><td class="num">${c.kg_total?c.kg_total.toLocaleString('es-AR'):'—'}</td><td class="num ${c.sin_peso?'al':''}">${c.sin_peso}</td></tr>`).join('')}
         <tr><td><b>Total</b></td><td></td><td class="num"><b>${st.totales.plantel}</b></td><td class="num"><b>${st.totales.venta}</b></td><td class="num"><b>${st.totales.cabezas}</b></td><td></td><td class="num"><b>${st.totales.kg_total.toLocaleString('es-AR')}</b></td><td></td></tr></tbody></table></div></div>`:''}
+      <div class="caja"><h3>Madres y padres que están en otro campo</h3>
+        <p class="ayuda">Un ternero puede estar en un campo y su madre en otro. Acá se ven los que quedaron sin vincular y se arreglan de una vez. Los ambiguos (más de un candidato) hay que resolverlos de a uno desde la ficha del animal.</p>
+        <div class="acciones"><button class="btn g" onclick="revisarVinculos()">Revisar</button><button class="btn" id="vinArreglar" onclick="arreglarVinculos()" disabled>Arreglar los claros</button><button class="btn g" id="vinExternos" onclick="marcarExternos()" disabled>Marcar el semen como de afuera</button><span class="mut" id="vinEstado" style="font-size:12px"></span></div>
+        <div class="res" id="vinRes"></div>
+      </div>
       <div class="caja"><h3>Trasladar animales a otro campo</h3>
         <p class="ayuda">Los RP, uno por línea, y a qué campo van. Viajan con todo su historial; en este campo quedan como trasladados. Primero Revisar.</p>
         <div class="fila">
@@ -1161,6 +1191,68 @@ async function pintarEmpresa(){
         <div class="res" id="trRes"></div>
       </div>`;
   }catch(e){ el.innerHTML=`<div class="aviso mal">${esc(e.message)}</div>`; }
+}
+async function revisarVinculos(){
+  const est=document.getElementById("vinEstado"); est.textContent="Revisando todos los campos…";
+  try{
+    const r=await fetch(urlCampo("/api/vinculos?empresa=1")).then(x=>x.json());
+    if(r.error) throw new Error(r.error);
+    const R=r.resumen;
+    const partes=[];
+    if(R.arreglables) partes.push(R.arreglables+" se arreglan solos"+(R.nombre_a_rp?" ("+R.nombre_a_rp+" son el nombre del toro)":""));
+    if(R.ambiguo) partes.push(R.ambiguo+" ambiguos");
+    if(R.probables_externos) partes.push(R.probables_externos+" parecen semen");
+    if(R.madres_no_cargadas) partes.push(R.madres_no_cargadas+" madres no cargadas");
+    est.textContent = R.total ? R.total+" sin resolver · "+partes.join(" · ") : "Está todo vinculado";
+    document.getElementById("vinArreglar").disabled = !R.arreglables;
+    document.getElementById("vinExternos").disabled = !R.probables_externos;
+    let html="";
+    for(const c of r.campos){
+      if(!c.filas || !c.filas.length) continue;
+      const orden={corregir_rp:0, en_otro_campo:1, ambiguo:2, no_existe:3};
+      const filas=[...c.filas].sort(function(a,b){ return (orden[a.estado]||9)-(orden[b.estado]||9); });
+      html += "<h3 class=\"s\" style=\"margin-top:14px\">"+esc(c.campo_nombre)+" <span class=\"mut\" style=\"font-weight:300;letter-spacing:0;text-transform:none\">"+c.filas.length+"</span></h3>"
+        + "<div class=\"tw\"><table><thead><tr><th>Animal</th><th>Relación</th><th>Dice</th><th>Qué pasa</th><th>Dónde está</th></tr></thead><tbody>"
+        + filas.slice(0,40).map(function(f){
+            const et = f.estado==="en_otro_campo" ? "<span class=\"tag t-cabeza\">otro campo</span>"
+              : f.estado==="corregir_rp" ? (f.subtipo==="nombre_a_rp" ? "<span class=\"tag t-preñada\">nombre → RP</span>" : "<span class=\"tag t-preñada\">RP distinto</span>")
+              : f.estado==="ambiguo" ? "<span class=\"tag t-cola\">ambiguo</span>"
+              : f.subtipo==="probable_externo" ? "<span class=\"tag t-vendido\">semen / afuera</span>"
+              : "<span class=\"tag t-falló\">no está cargado</span>";
+            return "<tr><td class=\"rp\">"+esc(f.rp)+"</td><td class=\"mut\">"+f.relacion+"</td><td>"+esc(f.valor||"")+"</td><td>"+et+"</td><td class=\"mut\">"+esc(f.porque||"")+"</td></tr>";
+          }).join("")
+        + "</tbody></table></div>"
+        + (c.filas.length>40 ? "<p class=\"ayuda\">y "+(c.filas.length-40)+" más</p>" : "");
+    }
+    document.getElementById("vinRes").innerHTML = html || "<div class=\"aviso ok\" style=\"margin:0\">Ningún animal quedó con la madre o el padre sin encontrar.</div>";
+  }catch(e){ est.textContent=""; document.getElementById("vinRes").innerHTML="<div class=\"aviso mal\" style=\"margin:0\">"+esc(e.message)+"</div>"; }
+}
+async function marcarExternos(){
+  if(!confirm("Los padres que parecen semen o toros de afuera dejarán de figurar como error. ¿Seguimos?")) return;
+  const est=document.getElementById("vinEstado"); est.textContent="Marcando…";
+  try{
+    const campos = camposTodos.filter(function(c){ return c.empresa===empresaActual; });
+    let n=0;
+    for(const c of campos){
+      const r=await fetch(API+"/api/vinculos/externos?campo="+encodeURIComponent(c.key),{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}).then(x=>x.json());
+      if(!r.error) n+=r.cuantos||0;
+    }
+    toast(n+" padres marcados como de afuera",5000); revisarVinculos();
+  }catch(e){ est.textContent="No pude: "+e.message; }
+}
+async function arreglarVinculos(){
+  const est=document.getElementById('vinEstado'); est.textContent='Arreglando…';
+  try{
+    const campos = camposTodos.filter(function(c){ return c.empresa===empresaActual; });
+    let bien=0, partes=[];
+    for(const c of campos){
+      const r=await fetch(API+'/api/vinculos?campo='+encodeURIComponent(c.key),{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(x=>x.json());
+      if(r.error) continue;
+      bien+=r.bien||0; if(r.bien) partes.push(c.nombre+': '+r.bien);
+    }
+    est.textContent = bien ? bien+' vínculos arreglados ('+partes.join(' · ')+')' : 'No había nada inequívoco para arreglar';
+    toast(est.textContent,5000); revisarVinculos(); cargar();
+  }catch(e){ est.textContent='No pude: '+e.message; }
 }
 async function trasladar(simular){
   const body={ texto:document.getElementById('trTexto').value, desde:document.getElementById('trDesde').value, hasta:document.getElementById('trHasta').value, fecha:document.getElementById('trFecha').value, motivo:document.getElementById('trMotivo').value, simular };
