@@ -40,8 +40,8 @@ Abre en http://localhost:3001. Sin clave de API el tablero anda igual; sólo el 
 | `CAMPOS` | JSON con los campos (ver abajo) |
 | `MODELO` | opcional. Por defecto `claude-opus-5`. Para comparar: `claude-sonnet-5`, `claude-fable-5-1` |
 | `ESFUERZO` | opcional. `high` por defecto; `medium` para abaratar, `xhigh`/`max` para exprimir |
-| `TWILIO_SID` / `TWILIO_TOKEN` | sólo si se usa WhatsApp |
-| `RESPALDO_CLAVE` | una clave cualquiera; habilita `/api/respaldo?clave=...` para bajar una copia de la base |
+| `TWILIO_SID` / `TWILIO_TOKEN` (o `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN`) | sólo si se usa WhatsApp |
+| `RESPALDO_CLAVE` (o `CLAVE_BACKUP`) | una clave cualquiera; habilita `/api/respaldo?clave=...` para bajar una copia de la base |
 | `WHATSAPP_PERMITIDOS` | números que pueden hablarle, separados por coma (`5491155551234,5491166665678`). Sin esto, cualquiera |
 | `URL_PUBLICA` | la dirección de la app (`https://tu-app.up.railway.app`), para que los links lleguen bien al teléfono |
 | `WHATSAPP_CAMPOS` | si hay varios campos: JSON número → clave (`{"5491155551234":"videla"}`) |

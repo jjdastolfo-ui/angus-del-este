@@ -17,7 +17,7 @@
 
 function configurar(CAMPOS) {
   let EMPRESAS = {};
-  try { EMPRESAS = JSON.parse(process.env.EMPRESAS || "{}"); } catch (e) { console.log("EMPRESAS no es un JSON válido:", e.message); }
+  try { EMPRESAS = JSON.parse(String(process.env.EMPRESAS || "{}").trim().replace(/[\u201C\u201D\u201E\u2033]/g, "\"").replace(/[\u2018\u2019]/g, "\"")); } catch (e) { console.log("EMPRESAS no es un JSON válido:", e.message); }
   const claves = new Set(Object.keys(EMPRESAS));
   for (const c of Object.values(CAMPOS)) if (c.empresa) claves.add(c.empresa);
   if (!claves.size) claves.add("empresa");

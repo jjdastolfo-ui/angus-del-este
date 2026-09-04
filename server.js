@@ -34,7 +34,7 @@ app.use((req, res, next) => {
 
 const VERSION = "rodeo-1.2";
 const PORT = process.env.PORT || 3001;
-const DB_DIR = process.env.DB_DIR || "/data";
+const DB_DIR = process.env.DB_DIR || (process.env.DB_PATH && !/\.db$/.test(process.env.DB_PATH) ? process.env.DB_PATH : null) || "/data";
 const plantelMod = require("./plantel.js");
 let destinosMod; try { destinosMod = require("./destinos.js"); } catch (e) { console.log("destinos.js no disponible:", e.message); }
 const animalesMod = require("./animales.js");   // buscar y ficha de cualquier animal
@@ -48,9 +48,27 @@ const mods = () => ({ plantelMod, animalesMod, destinosMod });
 
 // ── CAMPOS ───────────────────────────────────────────────────────────────────
 
-const CAMPOS = JSON.parse(process.env.CAMPOS || `{
-  "principal": { "nombre": "Angus del Este", "empresa": "improlux" }
-}`);
+// Si CAMPOS no es un JSON válido (comillas curvas al pegar, un salto de línea de
+// más), el servidor igual arranca con el campo por defecto y lo dice en /api/salud,
+// en vez de caerse sin explicar nada.
+const ERRORES_CONFIG = [];
+function leerJson(nombre, porDefecto) {
+  const crudo = process.env[nombre];
+  if (!crudo || !crudo.trim()) return porDefecto;
+  // Comillas curvas o comillas simples: se corrigen solas y se avisa.
+  const limpio = crudo.trim().replace(/[\u201C\u201D\u201E\u2033]/g, "\"").replace(/[\u2018\u2019]/g, "\"").replace(/^\x27|\x27$/g, "").replace(/^"(\{.*\})"$/s, "$1");
+  try {
+    const v = JSON.parse(limpio);
+    if (limpio !== crudo.trim()) ERRORES_CONFIG.push(`${nombre}: tenía comillas raras, se corrigieron solas (mejor pegarlo limpio)`);
+    return v;
+  } catch (e) {
+    ERRORES_CONFIG.push(`${nombre} no es un JSON válido (${e.message}). Se usa el valor por defecto. Revisá comillas y llaves en Railway → Variables → Raw Editor.`);
+    console.error("CONFIG:", ERRORES_CONFIG[ERRORES_CONFIG.length - 1]);
+    return porDefecto;
+  }
+}
+const CAMPOS = leerJson("CAMPOS", { principal: { nombre: "Angus del Este", empresa: "improlux" } });
+if (process.env.EMPRESAS) leerJson("EMPRESAS", null);   // sólo para validar y avisar; empresas.js lo vuelve a leer
 const CAMPO_DEFAULT = Object.keys(CAMPOS)[0];
 const bases = {};
 
@@ -642,8 +660,8 @@ let WA_CAMPOS = {}; try { WA_CAMPOS = JSON.parse(process.env.WHATSAPP_CAMPOS || 
 const soloDigitos = s => String(s || "").replace(/\D/g, "");
 
 function clienteTwilio() {
-  if (!process.env.TWILIO_SID || !process.env.TWILIO_TOKEN) return null;
-  return require("twilio")(process.env.TWILIO_SID, process.env.TWILIO_TOKEN);
+  if (!(process.env.TWILIO_SID || process.env.TWILIO_ACCOUNT_SID) || !(process.env.TWILIO_TOKEN || process.env.TWILIO_AUTH_TOKEN)) return null;
+  return require("twilio")((process.env.TWILIO_SID || process.env.TWILIO_ACCOUNT_SID), (process.env.TWILIO_TOKEN || process.env.TWILIO_AUTH_TOKEN));
 }
 
 // WhatsApp corta en 1600 caracteres: se parte por párrafos, sin cortar palabras.
@@ -676,7 +694,7 @@ async function enviarWhatsApp(twilio, from, to, texto) {
 
 // Lo que llega por WhatsApp (foto, PDF, planilla, audio…) se baja de Twilio.
 async function bajarMedia(url, mimeDeclarado) {
-  const auth = Buffer.from(`${process.env.TWILIO_SID}:${process.env.TWILIO_TOKEN}`).toString("base64");
+  const auth = Buffer.from(`${(process.env.TWILIO_SID || process.env.TWILIO_ACCOUNT_SID)}:${(process.env.TWILIO_TOKEN || process.env.TWILIO_AUTH_TOKEN)}`).toString("base64");
   const r = await fetch(url, { headers: { Authorization: `Basic ${auth}` }, redirect: "follow" });
   if (!r.ok) throw new Error(`No pude bajar el adjunto (${r.status})`);
   const mime = (r.headers.get("content-type") || mimeDeclarado || "application/octet-stream").split(";")[0];
@@ -813,7 +831,7 @@ app.post("/api/traslados", (req, res) => {
 // Protegido con la variable RESPALDO_CLAVE: sin ella, esta ruta no existe.
 //   curl -o principal.db "https://TU-APP.up.railway.app/api/respaldo?clave=LA_CLAVE&campo=principal"
 app.get("/api/respaldo", async (req, res) => {
-  const clave = process.env.RESPALDO_CLAVE;
+  const clave = process.env.RESPALDO_CLAVE || process.env.CLAVE_BACKUP;
   if (!clave) return res.status(404).send("No hay RESPALDO_CLAVE configurada");
   if (String(req.query.clave || "") !== clave) return res.status(403).send("Clave incorrecta");
   const k = CAMPOS[req.query.campo] ? req.query.campo : CAMPO_DEFAULT;
@@ -838,7 +856,7 @@ app.get("/api/volumen", (req, res) => {
 });
 
 app.get("/api/salud", (req, res) => {
-  const out = { version: VERSION, modelo: MODELO, esfuerzo: bot.esfuerzo, empresas: empresasDe().lista(), campos: {} };
+  const out = { version: VERSION, modelo: MODELO, esfuerzo: bot.esfuerzo, ...(ERRORES_CONFIG.length ? { errores_config: ERRORES_CONFIG } : {}), empresas: empresasDe().lista(), campos: {} };
   for (const k of Object.keys(CAMPOS)) {
     try {
       const db = getDB(k);
