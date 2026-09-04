@@ -123,6 +123,32 @@ async function enviarVenta(db, venta, fin) {
   }
 }
 
+// ── 2b. UN GASTO O UN INGRESO CUALQUIERA ─────────────────────────────────────
+/**
+ * Registra un movimiento en el financiero: un gasto del campo (sanidad, alimento,
+ * combustible, personal) o un ingreso que no sea venta de hacienda. Con
+ * simular=true sólo devuelve lo que mandaría, sin escribir.
+ */
+async function registrarMovimiento(db, m, fin) {
+  const concepto = String(m.concepto || "").toUpperCase().trim();
+  if (!concepto) throw new Error("Falta el concepto (SANIDAD, ALIMENTO, COMBUSTIBLE…)");
+  const egreso = Number(m.egreso || 0), ingreso = Number(m.ingreso || 0);
+  if (!(egreso > 0) && !(ingreso > 0)) throw new Error("Falta el monto: egreso (gasto) o ingreso");
+  const cuerpo = { fecha: m.fecha || new Date().toISOString().slice(0, 10), concepto,
+    detalle: (m.detalle || "") + (m.detalle ? " · " : "") + "desde RODEO", ingreso, egreso,
+    proveedor: m.proveedor || "", es_cc: m.es_cc ? 1 : 0, fuente: "rodeo", campo: config(fin).campo || undefined };
+  if (m.simular) return { simulado: true, enviado: false, movimiento: cuerpo, mensaje: `Listo para registrar: ${concepto} ${egreso > 0 ? "gasto" : "ingreso"} ${egreso || ingreso}${m.proveedor ? " · " + m.proveedor : ""}. Confirmá y lo mando.` };
+  if (!configurado(fin)) { anotar(db, "enviado", "movimiento", cuerpo.detalle, false, "sin financiero"); return { ok: false, enviado: false, motivo: "El financiero no está enlazado para esta empresa" }; }
+  try {
+    const r = await llamar("/api/transacciones", { method: "POST", body: JSON.stringify(cuerpo) }, fin);
+    anotar(db, "enviado", "movimiento", `${concepto} ${egreso || ingreso}`, true, r);
+    return { ok: true, enviado: true, id_financiero: r && r.id, movimiento: cuerpo, mensaje: `Registrado en el financiero: ${concepto} ${egreso > 0 ? "-" : "+"}${egreso || ingreso}${m.proveedor ? " · " + m.proveedor : ""}` };
+  } catch (e) {
+    anotar(db, "enviado", "movimiento", `${concepto} ${egreso || ingreso}`, false, e.message);
+    return { ok: false, enviado: false, motivo: e.message, movimiento: cuerpo };
+  }
+}
+
 // ── 3. LEER EL FINANCIERO ────────────────────────────────────────────────────
 /**
  * consulta: "resumen" (el mes en curso), "transacciones" (con desde/hasta/concepto/texto),
@@ -171,4 +197,4 @@ async function pedirSincronizacion(db, campoKey, fin, todosLosCampos) {
   return r;
 }
 
-module.exports = { init, config, configurado, resumenRodeo, enviarVenta, consultar, estado, pedirSincronizacion, setFetch, llamar };
+module.exports = { init, config, configurado, resumenRodeo, enviarVenta, registrarMovimiento, consultar, estado, pedirSincronizacion, setFetch, llamar };

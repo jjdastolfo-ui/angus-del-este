@@ -44,7 +44,8 @@ Abre en http://localhost:3001. Sin clave de API el tablero anda igual; sólo el 
 | `RESPALDO_CLAVE` (o `CLAVE_BACKUP`) | una clave cualquiera; habilita `/api/respaldo?clave=...` para bajar una copia de la base |
 | `WHATSAPP_PERMITIDOS` | números que pueden hablarle, separados por coma (`5491155551234,5491166665678`). Sin esto, cualquiera |
 | `URL_PUBLICA` | la dirección de la app (`https://tu-app.up.railway.app`), para que los links lleguen bien al teléfono |
-| `WHATSAPP_CAMPOS` | si hay varios campos: JSON número → clave (`{"5491155551234":"videla"}`) |
+| `WHATSAPP_CAMPOS` | si hay varios campos: JSON número del remitente → clave (`{"5491155551234":"videla"}`) |
+| `WHATSAPP_<SUFIJO>` | otro número del bot (`WHATSAPP_POSTA=whatsapp:+549…`), con su cuenta `TWILIO_SID_<SUFIJO>` / `TWILIO_TOKEN_<SUFIJO>` y su campo `WHATSAPP_CAMPO_<SUFIJO>` (si no está, se busca un campo cuya clave contenga el sufijo: POSTA → `angus_la_posta`) |
 
 Node 22 o más nuevo (`engines` en `package.json` lo pide; Railway lo respeta). La
 versión 13 de `better-sqlite3` trae el binario compilado para Node 22 a 25, así
@@ -263,6 +264,8 @@ Para pasar una organización al tablero nuevo, en el portal (Admin → organizac
 | Clave de campo ganadero | la clave en `CAMPOS`, ej. `angus_del_este` |
 | Frontend ganadero (URL) | la misma dirección de esta app, con barra final: `https://angus-del-este-production.up.railway.app/` |
 
+Si la clave de campo del portal no coincide, el backend usa la organización (`org=<slug>`) para elegir la empresa: por parecido de nombre, o con la variable `ORGANIZACIONES` (`{"cabana-amakaik":"gullo","angus-del-este":"improlux","las-tranqueras":"amakaik"}`).
+
 Y en esta app, `CAMPOS` con todos los campos de todas las organizaciones (cada
 uno con su `empresa`) y `EMPRESAS` con el financiero de cada una. Ejemplo con
 las tres organizaciones actuales:
@@ -317,6 +320,23 @@ Y ya está: le escribís como al chat del tablero. Recuerda la conversación de
 las últimas 48 horas por número, parte las respuestas largas, manda "Estoy
 mirando la base…" si tarda, y si le mandás una **foto de la libreta** la lee,
 te muestra qué entendió y carga cuando confirmás.
+
+### Un número por empresa, que atiende las dos cosas
+
+Cada empresa puede tener su propio número. El número decide el campo y, con él, la
+empresa y su financiero:
+
+| Variables | Número | Campo | Financiero |
+|---|---|---|---|
+| `TWILIO_NUMBER` + `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` | el principal | `CAMPO_DEFAULT` | el de esa empresa |
+| `WHATSAPP_POSTA` + `TWILIO_SID_POSTA` / `TWILIO_TOKEN_POSTA` | el de La Posta | `angus_la_posta` (o `WHATSAPP_CAMPO_POSTA`) | el de esa empresa |
+| `WHATSAPP_<SUFIJO>` … | otro más | por sufijo o `WHATSAPP_CAMPO_<SUFIJO>` | el de esa empresa |
+
+Al mismo número se le pregunta y se le carga **lo ganadero y lo financiero**: lo del
+campo va a la base del campo; lo de plata, al financiero de esa empresa
+(herramientas `finanzas` para leer y `finanzas_registrar` para cargar un gasto o un
+ingreso; las ventas de hacienda van con `destinar salida` y se mandan solas). Todos
+los números apuntan al mismo webhook: `https://TU-APP/webhook`.
 
 El sandbox pide volver a mandar `join …` cada 72 horas y sólo desde números
 que se unieron. Para producción (número propio, sin códigos) se aprueba un

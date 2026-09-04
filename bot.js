@@ -267,6 +267,23 @@ const HERRAMIENTAS = [
       limite: { type: "integer", description: "Cuántas transacciones devolver (default 200). Los totales siempre son de todas." } } }
   },
   {
+    name: "finanzas_registrar",
+    description: "Registra un movimiento en el sistema financiero de la empresa: un gasto del campo (sanidad, " +
+      "alimento, combustible, personal, flete, servicios) o un ingreso que no sea venta de hacienda (esas van " +
+      "por destinar salida). Ej: \"compré 10 frascos de ivermectina, 300 dólares, a Diego Pioli\". Antes de " +
+      "escribir, mirá con finanzas qué conceptos se usan en esa empresa y elegí uno de ésos. Mostrale al " +
+      "usuario qué vas a registrar (simular=true) y mandalo cuando confirme.",
+    input_schema: { type: "object", properties: {
+      concepto: { type: "string", description: "El concepto tal como se usa en el financiero: SANIDAD, ALIMENTO, COMBUSTIBLE, PERSONAL, FLETE…" },
+      egreso: { type: "number", description: "Monto del gasto, en la moneda del financiero." },
+      ingreso: { type: "number", description: "Monto del ingreso, si es una entrada de plata." },
+      detalle: { type: "string", description: "Qué fue, en una línea." },
+      proveedor: { type: "string" }, fecha: { type: "string", description: "AAAA-MM-DD. Hoy si no viene." },
+      es_cc: { type: "boolean", description: "true si queda en cuenta corriente (no se pagó todavía)." },
+      simular: { type: "boolean", description: "true: mostrar qué se registraría, sin escribir." } },
+      required: ["concepto"] }
+  },
+  {
     name: "recordar",
     description: "Guarda algo que el usuario te enseña del campo y que va a servir para siempre: cómo llaman " +
       "a un potrero, un criterio de descarte, que tal toro ya no se usa, quién es quién, una corrección " +
@@ -401,7 +418,10 @@ QUÉ HERRAMIENTA PARA QUÉ:
 · destinar: marcar a dónde va un animal (engorde/terminación, venta, reproductor, queda) o que ya salió. Nunca por SQL.
 · crear_tablero: algo para mirar en pantalla. exportar_archivo: algo para bajar (Excel, CSV, imprimir).
 · recordar: lo que el usuario te enseña del campo y va a servir siempre.
-· finanzas: el sistema financiero (IMPROLUX), si está enlazado: gastos por concepto, ventas, stock valuado. Cuando registrás una salida con precio (destinar salida), la venta se le manda sola.
+· finanzas: el sistema financiero de la empresa, si está enlazado: gastos por concepto, ventas, stock valuado, cuentas, cheques.
+· finanzas_registrar: cargar un gasto o un ingreso ahí. Las ventas de hacienda NO: ésas van por destinar salida con el precio, y se mandan solas.
+
+ATENDÉS LAS DOS COSAS: lo del campo (animales, pesadas, sanidad aplicada, nacimientos) va a la base ganadera; lo de plata (cuánto se gastó, qué se compró, cuánto entró) va al financiero de esta empresa. Un mismo hecho puede ser las dos: "vacuné 80 vacas con ivermectina que compré a 300 dólares" es una aplicación de sanidad (relevar) y un gasto (finanzas_registrar). Hacé las dos y contá las dos. Si el financiero no está enlazado, decilo y cargá igual lo del campo.
 · campos: la empresa entera, campo por campo, cuando preguntan por el total o comparan campos. Vos estás parado en un campo: plantel, ficha y consultar miran sólo éste.
 · trasladar: mover animales a otro campo de la empresa. Simulá primero.
 · leer_adjunto / importar_adjunto: cuando mandan un archivo. Fotos y PDF los ves directo; planillas y textos llegan resumidos con un id.
@@ -510,6 +530,11 @@ ${cal.cortes ? `Bloques de la parición en curso: cabeza hasta ${cal.cortes.CABE
         return destinosMod.marcarVarios(db, rps, input.destino, op);
       }
       case "finanzas": { const em = empresasDe(); return finanzasMod.consultar(db, input, em && ctx.campoKey ? em.finanzasDe(ctx.campoKey) : undefined); }
+      case "finanzas_registrar": {
+        if (ctx.soloLectura && !input.simular) throw new Error("Esta sesión es de sólo lectura");
+        const em = empresasDe();
+        return finanzasMod.registrarMovimiento(db, input, em && ctx.campoKey ? em.finanzasDe(ctx.campoKey) : undefined);
+      }
       case "campos": {
         const em = empresasDe(); if (!em) throw new Error("No hay empresas configuradas");
         const e = em.empresaDe(ctx.campoKey);
@@ -573,6 +598,7 @@ ${cal.cortes ? `Bloques de la parición en curso: cabeza hasta ${cal.cortes.CABE
     if (nombre === "exportar_archivo") return { tipo: "archivo", herramienta: nombre, nombre: out.nombre, url: out.url, filas: out.filas };
     if (nombre === "destinar") return { tipo: "escritura", herramienta: nombre, que: out.mensaje || `destinar ${input.accion || "marcar"}`, cambios: (out.hechos || out.resultados || []).length };
     if (nombre === "finanzas") return { tipo: "consulta", herramienta: nombre, porque: `finanzas: ${input.consulta || "resumen"}`, filas: out && out.total };
+    if (nombre === "finanzas_registrar") return { tipo: input.simular ? "consulta" : "escritura", herramienta: nombre, que: out.mensaje || out.motivo, cambios: out.ok ? 1 : 0 };
     if (nombre === "campos") return { tipo: "consulta", herramienta: nombre, porque: "la empresa entera", filas: out && out.campos && out.campos.length };
     if (nombre === "trasladar") return { tipo: input.simular ? "consulta" : "escritura", herramienta: nombre, que: out.mensaje, cambios: out.bien };
     if (nombre === "leer_adjunto") return { tipo: "consulta", herramienta: nombre, porque: `leer adjunto ${input.id}`, filas: out.mostradas };
@@ -592,6 +618,7 @@ ${cal.cortes ? `Bloques de la parición en curso: cabeza hasta ${cal.cortes.CABE
     if (nombre === "exportar_archivo") return `armo el archivo "${input.titulo}"`;
     if (nombre === "destinar") return input.accion === "sacar" ? `le saco el destino a ${(input.rps || []).length} animal(es)` : input.accion === "salida" ? `registro la salida de ${(input.rps || []).length} animal(es)` : `marco ${(input.rps || []).length} animal(es) → ${input.destino}`;
     if (nombre === "finanzas") return `consulto el financiero (${input.consulta || "resumen"})`;
+    if (nombre === "finanzas_registrar") return input.simular ? "preparo el movimiento" : `registro ${input.concepto} en el financiero`;
     if (nombre === "campos") return "miro todos los campos de la empresa";
     if (nombre === "trasladar") return `${input.simular ? "reviso el traslado de" : "traslado"} ${(input.rps || []).length} animal(es) a ${input.hasta}`;
     if (nombre === "leer_adjunto") return "leo más del archivo";
