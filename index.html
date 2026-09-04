@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RODEO</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --azul:#0B3D7C; --azul2:#072957; --oro:#C9A24B; --tinta:#10243f;
+  --papel:#F7F3EC; --linea:#E2D9CB; --gris:#8A827A;
+  --verde:#1a7a4a; --rojo:#B83232;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--papel);color:var(--tinta);font-family:Oswald,system-ui,sans-serif;
+  font-weight:300;font-size:14px;display:flex;min-height:100vh}
+.mono{font-family:'JetBrains Mono',monospace}
+main{flex:1;min-width:0;display:flex;flex-direction:column}
+button,input,select,textarea{font-family:inherit}
+
+header{background:var(--azul2);color:#fff;padding:15px 20px 0}
+.hrow{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.brand{font-size:22px;font-weight:600;letter-spacing:2.5px}
+.sub{font-size:11px;color:var(--oro);letter-spacing:2px;margin-top:3px;text-transform:uppercase}
+.tabs{display:flex;gap:2px;margin-top:14px;flex-wrap:wrap}
+.tab{background:rgba(255,255,255,.09);color:rgba(255,255,255,.72);border:none;padding:10px 14px;
+  font-size:11.5px;letter-spacing:1.6px;text-transform:uppercase;cursor:pointer;border-radius:4px 4px 0 0}
+.tab:hover{background:rgba(255,255,255,.16);color:#fff}
+.tab.on{background:var(--papel);color:var(--azul);font-weight:600}
+.tab.sep{margin-left:auto}
+.selc{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.25);
+  border-radius:4px;padding:5px 9px;font-size:12px;align-self:center}
+.selc option{color:#111}
+.franja{height:4px;background:var(--oro)}
+
+/* ── Buscador global ─────────────────────────────────────────────── */
+.gs{position:relative;margin-left:auto;align-self:center;width:min(420px,100%)}
+.gs input{width:100%;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:4px;
+  padding:8px 34px 8px 12px;font-size:14px;letter-spacing:.5px}
+.gs input::placeholder{color:rgba(255,255,255,.55)}
+.gs input:focus{outline:none;border-color:var(--oro);background:rgba(255,255,255,.18)}
+.gs .k{position:absolute;right:9px;top:8px;font-size:10px;color:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.3);
+  border-radius:3px;padding:1px 5px;font-family:'JetBrains Mono',monospace}
+.gsr{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;color:var(--tinta);border:1px solid var(--linea);
+  border-radius:4px;box-shadow:0 8px 24px rgba(0,0,0,.18);z-index:80;max-height:420px;overflow:auto;display:none}
+.gsr.on{display:block}
+.gsr .r{display:flex;gap:10px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--linea);cursor:pointer}
+.gsr .r:hover,.gsr .r.sel{background:#FAF7F0}
+.gsr .r b{font-size:15px;font-weight:500;min-width:64px}
+.gsr .r .d{font-size:12px;color:var(--gris);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gsr .r .c{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--oro)}
+.gsr .vacio{padding:16px;color:var(--gris);text-align:center;font-size:13px}
+
+.kpis{display:flex;gap:1px;background:var(--linea);border-bottom:1px solid var(--linea);flex-wrap:wrap}
+.kpi{background:#fff;padding:12px 18px;flex:1;min-width:116px;cursor:pointer;transition:.12s}
+.kpi:hover{background:#FAF7F0}
+.kpi b{display:block;font-size:25px;font-weight:500;color:var(--azul);line-height:1.1}
+.kpi span{font-size:9.5px;letter-spacing:1.1px;text-transform:uppercase;color:var(--gris)}
+.kpi.al b{color:var(--rojo)} .kpi.bien b{color:var(--verde)} .kpi.oro b{color:#B8860B}
+
+.bar{position:sticky;top:0;z-index:30;background:#fff;border-bottom:1px solid var(--linea);
+  padding:10px 20px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;box-shadow:0 2px 6px rgba(0,0,0,.06)}
+.bar input,.bar select{font-size:12.5px;padding:7px 10px;border:1px solid var(--linea);
+  border-radius:4px;background:#fff;color:var(--tinta)}
+.bar input[type=text]{min-width:200px;flex:1;max-width:360px}
+.bar input:focus,.bar select:focus{outline:none;border-color:var(--azul)}
+.btn{background:var(--azul);color:#fff;border:none;border-radius:4px;padding:7px 15px;
+  font-size:11.5px;font-weight:500;letter-spacing:1.2px;text-transform:uppercase;cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--azul2)} .btn.g{background:#fff;color:var(--tinta);border:1px solid var(--linea)}
+.btn.g:hover{background:#FAF7F0} .btn.r{background:#fff;color:var(--rojo);border:1px solid var(--linea)}
+.btn.s{padding:5px 10px;font-size:10.5px}
+.btn:disabled{opacity:.5;cursor:default}
+.count{margin-left:auto;font-size:11px;color:var(--gris);letter-spacing:1px;text-transform:uppercase}
+
+/* menú desplegable */
+.menu{position:relative}
+.menu .dd{display:none;position:absolute;left:0;top:calc(100% + 4px);background:#fff;border:1px solid var(--linea);border-radius:4px;
+  box-shadow:0 8px 24px rgba(0,0,0,.14);min-width:250px;z-index:50;padding:6px 0}
+.menu.on .dd{display:block}
+.dd button,.dd label{display:flex;width:100%;text-align:left;background:none;border:none;padding:8px 14px;font-size:13px;
+  cursor:pointer;color:var(--tinta);gap:8px;align-items:center}
+.dd button:hover,.dd label:hover{background:#FAF7F0}
+.dd .t{font-size:9.5px;letter-spacing:1.4px;text-transform:uppercase;color:var(--gris);padding:8px 14px 3px}
+.dd hr{border:0;border-top:1px solid var(--linea);margin:5px 0}
+.dd small{margin-left:auto;color:var(--gris);font-size:11px}
+.dd .cols{max-height:320px;overflow:auto;columns:2;column-gap:0}
+.dd .cols label{padding:5px 14px;break-inside:avoid}
+
+.scroll{flex:1;overflow:auto;padding:14px 20px 40px}
+table{width:100%;border-collapse:collapse;font-size:13px;background:#fff}
+.scroll>table{min-width:900px}
+thead th{background:var(--azul2);color:#fff;text-align:left;font-size:9.5px;letter-spacing:1.2px;
+  text-transform:uppercase;font-weight:400;padding:11px 8px;white-space:nowrap;cursor:pointer;position:sticky;top:0;z-index:5}
+thead th:hover{background:var(--azul)}
+th.num,td.num{text-align:right}
+th .fl{color:var(--oro);margin-left:4px}
+td{padding:8px;border-bottom:1px solid var(--linea);white-space:nowrap}
+tbody tr:hover{background:#FAF7F0;cursor:pointer}
+td.rp{font-weight:500;font-size:14.5px}
+td.num{font-family:'JetBrains Mono',monospace;font-size:12px}
+.mut{color:var(--gris)} .al{color:var(--rojo);font-weight:500} .bi{color:var(--verde);font-weight:500}
+tr.fallo td{background:rgba(184,50,50,.05)}
+.tag{font-size:9px;letter-spacing:1.1px;text-transform:uppercase;padding:2px 8px;border-radius:2px;font-weight:500;white-space:nowrap}
+.t-cabeza{background:rgba(26,122,74,.14);color:var(--verde)}
+.t-cuerpo{background:rgba(11,61,124,.11);color:var(--azul)}
+.t-cola{background:rgba(201,162,75,.24);color:#8A6D28}
+.t-tardia{background:rgba(184,50,50,.12);color:var(--rojo)}
+.t-preñada,.t-activo{background:rgba(11,61,124,.11);color:var(--azul)}
+.t-criando{background:rgba(201,162,75,.24);color:#8A6D28}
+.t-destetó,.t-ok{background:rgba(26,122,74,.14);color:var(--verde)}
+.t-falló,.t-muerto,.t-error{background:rgba(184,50,50,.12);color:var(--rojo)}
+.t-vendido,.t-sin{background:rgba(138,130,122,.15);color:var(--gris)}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:middle}
+.vacio{text-align:center;padding:44px;color:var(--gris);background:#fff}
+.aviso{background:#fff;border-left:3px solid var(--oro);padding:9px 14px;margin:0 20px 12px;font-size:12px;color:var(--gris)}
+.aviso.ok{border-color:var(--verde)} .aviso.mal{border-color:var(--rojo)}
+
+/* ── Paneles (relevar, archivos) ─────────────────────────────────── */
+.panel{padding:16px 20px 40px;max-width:1200px}
+.sub-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.sub-tabs button{background:#fff;border:1px solid var(--linea);border-radius:20px;padding:7px 16px;font-size:12px;
+  letter-spacing:1px;text-transform:uppercase;cursor:pointer;color:var(--gris)}
+.sub-tabs button.on{background:var(--azul);color:#fff;border-color:var(--azul)}
+.caja{background:#fff;border:1px solid var(--linea);border-radius:4px;padding:18px 20px;margin-bottom:14px}
+.caja h3{margin:0 0 4px;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--azul);font-weight:500}
+.caja p.ayuda{margin:0 0 14px;font-size:12.5px;color:var(--gris);line-height:1.55;max-width:78ch}
+.fila{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px}
+.campo{display:flex;flex-direction:column;gap:4px;min-width:120px}
+.campo.w{flex:1;min-width:220px}
+.campo label{font-size:9.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--gris)}
+.campo input,.campo select,.campo textarea{font-size:13.5px;padding:8px 10px;border:1px solid var(--linea);border-radius:4px;background:#fff;color:var(--tinta)}
+.campo input:focus,.campo select:focus,.campo textarea:focus{outline:none;border-color:var(--azul)}
+textarea.lineas{width:100%;min-height:170px;font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.5;resize:vertical}
+.acciones{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px}
+.res{margin-top:14px}
+.res table{font-size:12.5px;border:1px solid var(--linea)}
+.res td,.res th{padding:6px 8px}
+.res tbody tr:hover{cursor:default;background:#fff}
+.lista{display:flex;flex-direction:column;gap:1px;background:var(--linea);border:1px solid var(--linea);border-radius:4px;overflow:hidden}
+.lista .it{background:#fff;padding:11px 16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.lista .it b{font-weight:500;font-size:14px}
+.lista .it .d{font-size:12px;color:var(--gris);flex:1;min-width:160px}
+.lista .it a{color:var(--azul);font-size:12px;letter-spacing:1px;text-transform:uppercase;text-decoration:none;padding:5px 9px;border:1px solid var(--linea);border-radius:3px}
+.lista .it a:hover{background:#FAF7F0}
+.chip{display:inline-block;font-size:11px;padding:3px 9px;border-radius:12px;background:var(--papel);border:1px solid var(--linea);color:var(--gris);margin:2px 4px 2px 0;cursor:pointer}
+.chip:hover{border-color:var(--azul);color:var(--azul)}
+.dz{border:2px dashed var(--linea);border-radius:6px;padding:16px;text-align:center;color:var(--gris);font-size:13px;cursor:pointer}
+.dz:hover,.dz.over{border-color:var(--azul);color:var(--azul);background:#FAF7F0}
+
+/* ── Ficha ─────────────────────────────────────────────────────────── */
+.ov{position:fixed;inset:0;background:rgba(16,36,63,.5);display:none;align-items:flex-start;
+  justify-content:center;padding:22px 14px;z-index:60;overflow:auto}
+.ov.on{display:flex}
+.card{background:var(--papel);border-radius:4px;max-width:1040px;width:100%;overflow:hidden}
+.ct{background:var(--azul2);color:#fff;padding:18px 24px;display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
+.ct h2{margin:0;font-size:29px;font-weight:600;letter-spacing:1.5px;line-height:1}
+.ct .id{font-size:11px;color:var(--oro);letter-spacing:1.6px;margin-top:4px;text-transform:uppercase}
+.ct .acc{margin-left:auto;display:flex;gap:6px;align-items:center}
+.ct .acc button,.ct .acc a{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.3);
+  height:32px;padding:0 12px;border-radius:3px;cursor:pointer;font-size:11px;letter-spacing:1.2px;text-transform:uppercase;text-decoration:none;display:inline-flex;align-items:center}
+.ct .acc button:hover,.ct .acc a:hover{background:rgba(255,255,255,.2)}
+.cb{padding:20px 24px 26px}
+.fk{display:flex;gap:1px;background:var(--linea);border:1px solid var(--linea);flex-wrap:wrap;margin-bottom:22px}
+.fk>div{background:#fff;padding:11px 15px;flex:1;min-width:110px}
+.fk span{font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:var(--gris);display:block}
+.fk b{font-size:20px;font-weight:500;display:block;margin-top:2px}
+.fk b.s{font-size:15px}
+.fk a{color:var(--azul);text-decoration:none;border-bottom:1px dotted var(--azul)}
+h3.s{font-size:12.5px;letter-spacing:2px;text-transform:uppercase;color:var(--azul);
+  font-weight:500;margin:22px 0 10px;border-bottom:2px solid var(--linea);padding-bottom:6px;display:flex;align-items:center;gap:10px}
+h3.s:first-child{margin-top:0}
+h3.s .btn{margin-left:auto}
+.corr{background:rgba(201,162,75,.16);color:#8A6D28;font-size:9px;padding:1px 6px;border-radius:2px;margin-left:6px}
+.notaCaja{display:flex;gap:8px;margin-top:12px}
+.notaCaja input{flex:1;font-size:13px;padding:9px 12px;border:1px solid var(--linea);border-radius:4px}
+.tw{overflow:auto;border:1px solid var(--linea)}
+.tw table{min-width:0}
+.tw tbody tr:hover{cursor:default}
+.inl{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.inl input{font-size:13px;padding:8px 10px;border:1px solid var(--linea);border-radius:4px;width:110px}
+
+/* ── Chat ──────────────────────────────────────────────────────────── */
+.chat{width:340px;flex:0 0 340px;background:#fff;border-left:1px solid var(--linea);
+  display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.chh{padding:13px 16px;border-bottom:1px solid var(--linea);background:var(--papel)}
+.chh b{font-size:12px;font-weight:500;letter-spacing:1.4px;text-transform:uppercase;display:block}
+.chh span{font-size:11.5px;color:var(--gris);line-height:1.45;display:block;margin-top:3px}
+.msgs{flex:1;overflow:auto;padding:14px 16px;display:flex;flex-direction:column;gap:11px}
+.msg{max-width:92%;padding:9px 12px;border-radius:9px;font-size:13px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+.msg.yo{align-self:flex-end;background:var(--azul);color:#fff;border-bottom-right-radius:2px}
+.msg.bot{align-self:flex-start;background:var(--papel);border:1px solid var(--linea);border-bottom-left-radius:2px}
+.msg.bot a{color:var(--azul);font-weight:500}
+.msg.pen{color:var(--gris);font-style:italic}
+.pasos{font-size:10.5px;color:var(--gris);margin-top:6px;padding-top:6px;border-top:1px solid var(--linea)}
+.vivo{display:flex;flex-direction:column;gap:3px;margin-bottom:6px}
+.vivo .p{font-size:11.5px;color:var(--gris);display:flex;gap:6px;align-items:flex-start}
+.vivo .p::before{content:'›';color:var(--oro);font-weight:600}
+.vivo .p.err{color:var(--rojo)}
+.vivo .pen{font-size:11.5px;color:var(--gris);font-style:italic;opacity:.8;max-height:60px;overflow:hidden;white-space:pre-wrap}
+.msg .txt{white-space:pre-wrap}
+.chh .nuevo{float:right;background:none;border:1px solid var(--linea);border-radius:3px;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;cursor:pointer;color:var(--gris)}
+.chh .nuevo:hover{color:var(--azul);border-color:var(--azul)}
+.chh .modelo{font-size:10px;color:var(--oro);letter-spacing:1px;text-transform:uppercase;margin-top:3px;display:block}
+.sug{display:flex;flex-direction:column;gap:6px;padding:0 16px 12px}
+.sug button{background:var(--papel);border:1px solid var(--linea);border-radius:14px;padding:6px 12px;
+  font-size:12px;color:var(--gris);cursor:pointer;text-align:left}
+.sug button:hover{border-color:var(--azul);color:var(--azul)}
+.env{border-top:1px solid var(--linea);padding:11px 14px;display:flex;gap:8px;align-items:center}
+.env .clip{background:none;border:1px solid var(--linea);color:var(--gris);border-radius:50%;width:36px;height:36px;cursor:pointer;font-size:16px;flex:none}
+.env .clip:hover{border-color:var(--azul);color:var(--azul)}
+.adj{display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 8px}
+.adj .a{font-size:11.5px;background:var(--papel);border:1px solid var(--linea);border-radius:12px;padding:4px 10px;display:flex;gap:6px;align-items:center;max-width:100%}
+.adj .a span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
+.adj .a b{cursor:pointer;color:var(--gris)} .adj .a b:hover{color:var(--rojo)}
+.chat.arrastre{outline:3px dashed var(--oro);outline-offset:-6px}
+.msg .adjs{font-size:11px;opacity:.85;margin-bottom:4px}
+.msg.yo img{max-width:100%;max-height:180px;border-radius:6px;display:block;margin-bottom:6px}
+.env input{flex:1;font-size:13px;padding:9px 12px;border:1px solid var(--linea);border-radius:18px}
+.env input:focus{outline:none;border-color:var(--azul)}
+.env button{background:var(--azul);color:#fff;border:none;border-radius:50%;width:36px;height:36px;cursor:pointer;font-size:15px}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--azul2);color:#fff;padding:10px 18px;border-radius:4px;
+  font-size:13px;z-index:100;box-shadow:0 6px 20px rgba(0,0,0,.25);opacity:0;transition:.2s;pointer-events:none}
+.toast.on{opacity:1}
+@media(max-width:1000px){
+  body{flex-direction:column} .chat{width:100%;flex:none;height:auto;max-height:400px;position:static}
+  .gs{width:100%;margin-left:0} .tab{padding:9px 12px;font-size:11px} .tab.sep{margin-left:0}
+  .bar input[type=text]{min-width:140px}
+}
+</style>
+</head>
+<body>
+
+<main>
+  <header>
+    <div class="hrow">
+      <div><div class="brand" id="hBrand">RODEO</div>
+        <div class="sub" id="hSub">Conectando…</div></div>
+      <select class="selc" id="selCampo" onchange="cambiarCampo()"></select>
+      <div class="gs">
+        <input id="gq" placeholder="Buscar cualquier animal: RP, caravana, HBA, madre, padre, nota…" autocomplete="off"
+          oninput="buscarGlobal()" onkeydown="teclaBuscar(event)" onfocus="if(this.value)buscarGlobal()">
+        <span class="k">/</span>
+        <div class="gsr" id="gsr"></div>
+      </div>
+    </div>
+    <div class="tabs">
+      <button class="tab on" data-v="plantel" onclick="verVista(this)">Plantel</button>
+      <button class="tab" data-v="toros" onclick="verVista(this)">Toros</button>
+      <button class="tab" data-v="nac" onclick="verVista(this)">Nacimientos</button>
+      <button class="tab" data-v="recria" onclick="verVista(this)">Recría</button>
+      <button class="tab" data-v="term" onclick="verVista(this)">Terminación</button>
+      <button class="tab" data-v="dest" onclick="verVista(this)">Destinos</button>
+      <button class="tab" data-v="fallos" onclick="verVista(this)">No destetaron</button>
+      <button class="tab" data-v="animales" onclick="verVista(this)">Todos</button>
+      <button class="tab" data-v="empresa" id="tabEmpresa" onclick="verVista(this)" style="display:none">Empresa</button>
+      <button class="tab sep" data-v="relevar" onclick="verVista(this)">✎ Relevar</button>
+      <button class="tab" data-v="archivos" onclick="verVista(this)">⇩ Archivos</button>
+    </div>
+  </header>
+  <div class="franja"></div>
+
+  <div id="tablaVista">
+    <div class="kpis" id="kpis"></div>
+    <div id="avisos"></div>
+
+    <div class="bar">
+      <input type="text" id="q" placeholder="Filtrar esta tabla…" oninput="pintar()">
+      <select id="fpel" onchange="pintar()"><option value="">Pelaje: todos</option></select>
+      <select id="fcat" onchange="pintar()"><option value="">Categoría: todas</option></select>
+      <select id="fest" onchange="pintar()"><option value="">Estado: todos</option></select>
+      <select id="fblo" onchange="pintar()">
+        <option value="">Bloque: todos</option><option value="CABEZA">Cabeza</option>
+        <option value="CUERPO">Cuerpo</option><option value="COLA">Cola</option><option value="TARDIA">Tardía</option>
+      </select>
+      <select id="fsex" onchange="pintar()" style="display:none"><option value="">Sexo: todos</option><option value="M">Machos</option><option value="H">Hembras</option></select>
+      <button class="btn g s" onclick="limpiarFiltros()" title="Sacar todos los filtros">✕ filtros</button>
+
+      <div class="menu" id="mCols">
+        <button class="btn g" onclick="toggleMenu('mCols')">Columnas ▾</button>
+        <div class="dd"><div class="t">Mostrar</div><div class="cols" id="colsList"></div>
+          <hr><button onclick="resetCols()">Todas las columnas</button></div>
+      </div>
+
+      <div class="menu" id="mExp">
+        <button class="btn" onclick="toggleMenu('mExp')">⇩ Exportar ▾</button>
+        <div class="dd">
+          <div class="t">Lo que se ve (con filtros y columnas)</div>
+          <button onclick="exportar('xlsx')">Excel <small id="expN"></small></button>
+          <button onclick="exportar('csv')">CSV <small>para Excel en español</small></button>
+          <button onclick="exportar('html')">Imprimir / PDF</button>
+          <hr>
+          <div class="t">Para llevar al campo</div>
+          <button onclick="planillaDeVista('xlsx')">Planilla de relevamiento (Excel)</button>
+          <button onclick="planillaDeVista('html')">Planilla de relevamiento (imprimir)</button>
+          <hr>
+          <div class="t">Todo</div>
+          <button onclick="bajarUrl('/api/exportar/rodeo.xlsx')">Rodeo completo <small>un Excel, una hoja por tabla</small></button>
+          <button onclick="bajarUrl('/api/exportar/pesadas.xlsx')">Todas las pesadas</button>
+          <button onclick="bajarUrl('/api/exportar/servicios.xlsx')">Todos los servicios</button>
+          <button onclick="bajarUrl('/api/exportar/sanidad.xlsx')">Toda la sanidad</button>
+          <button onclick="bajarUrl('/api/exportar/notas.xlsx')">Notas de campo</button>
+          <button onclick="bajarUrl('/api/exportar/lotes.xlsx')">Lotes</button>
+        </div>
+      </div>
+      <div class="count" id="cnt"></div>
+    </div>
+
+    <div class="scroll"><table>
+      <thead><tr id="thead"></tr></thead>
+      <tbody id="tbody"><tr><td colspan="15" class="vacio">Cargando…</td></tr></tbody>
+    </table></div>
+  </div>
+
+  <div id="relevarVista" class="panel" style="display:none"></div>
+  <div id="empresaVista" class="panel" style="display:none"></div>
+  <div id="archivosVista" class="panel" style="display:none"></div>
+</main>
+
+<div class="chat">
+  <div class="chh"><button class="nuevo" onclick="nuevaConversacion()" title="Empezar de cero">Nueva</button><b>Preguntar</b>
+    <span>Consulta la base y razona. Pedile un Excel, un tablero, o que cargue lo que anotaste. Contale cosas del campo y las recuerda.</span>
+    <span class="modelo" id="chModelo"></span></div>
+  <div class="msgs" id="msgs"></div>
+  <div class="sug" id="sug"></div>
+  <div class="adj" id="adj"></div>
+  <div class="env">
+    <button class="clip" title="Adjuntar foto, PDF, Excel, CSV o Word" onclick="document.getElementById('adjInput').click()">📎</button>
+    <input type="file" id="adjInput" multiple accept="image/*,.pdf,.xlsx,.xls,.csv,.tsv,.txt,.docx,.json" style="display:none" onchange="agregarAdjuntos(this.files);this.value=''">
+    <input id="txt" placeholder="Escribí lo que necesitás… o mandale un archivo" onkeydown="if(event.key==='Enter')enviar()" onpaste="pegar(event)">
+    <button onclick="enviar()">↑</button>
+  </div>
+</div>
+
+<div class="ov" id="ov" onclick="if(event.target===this)cerrarFicha()">
+  <div class="card" id="ovCard"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const API = location.origin.includes('file') ? 'http://localhost:3001' : location.origin;
+const params = new URLSearchParams(location.search);
+let campo = params.get('campo') || localStorage.getItem('campo') || '';
+const empresaPedida = params.get('empresa') || '';   // el portal puede pedir una empresa entera
+const embebido = window.self !== window.top || !!params.get('org');
+let D = null, vista = 'plantel', orden = { col:'rp', desc:false }, historia = [];
+let empresaActual = null, camposTodos = [];
+// La conversación queda guardada en el servidor por sesión: al recargar sigue.
+let sesion = localStorage.getItem('sesion'); if(!sesion){ sesion = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())+Math.random()); localStorage.setItem('sesion', sesion); }
+let colsOcultas = {};   // por vista: { clave: true }
+try { colsOcultas = JSON.parse(localStorage.getItem('colsOcultas')||'{}'); } catch(e){}
+
+const esc = t => String(t==null?'':t).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+const dash = v => v==null||v===''?'<span class="mut">—</span>':esc(v);
+const fec = f => f? String(f).slice(8,10)+'/'+String(f).slice(5,7)+'/'+String(f).slice(2,4) : '';
+const tag = b => b?`<span class="tag t-${String(b).toLowerCase().replace(/\s.*/,'')}">${esc(b)}</span>`:'<span class="mut">—</span>';
+const punto = p => p?`<span class="dot" style="background:${/COLOR/i.test(p)?'#9C5B2E':'#2B2B2B'}"></span>${esc(p)}`:'<span class="mut">—</span>';
+const sexo = s => String(s||'').toUpperCase().startsWith('M')?'Macho':String(s||'').toUpperCase().startsWith('H')?'Hembra':'—';
+const urlCampo = q => `${API}${q}${q.includes('?')?'&':'?'}campo=${encodeURIComponent(campo)}`;
+// Como se escribe un RP en la manga: "b 332" = "B332", "011" = "11".
+const norm = s => String(s==null?'':s).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[\s\-_.\/]/g,'');
+const compacto = s => norm(s).replace(/(^|\D)0+(?=\d)/g,'$1');
+function toast(t, ms=2600){ const e=document.getElementById('toast'); e.textContent=t; e.classList.add('on'); clearTimeout(e._t); e._t=setTimeout(()=>e.classList.remove('on'),ms); }
+function hoy(){ return new Date().toISOString().slice(0,10); }
+
+// ── Las columnas de cada vista ───────────────────────────────────────────────
+const VISTAS = {
+  plantel: { titulo:'Plantel', conjunto:'plantel', cols:[
+    {k:'rp',t:'RP',cls:'rp'},
+    {k:'hba',t:'HBA / Elec.',cls:'mut',fmt:(v,f)=>dash(f.hba||f.chip)},
+    {k:'pelo',t:'Pelaje',fmt:v=>punto(v)},
+    {k:'categoria',t:'Categoría',cls:'mut'},
+    {k:'edad_meses',t:'Edad (m)',num:1},
+    {k:'peso_adulto',t:'P. adulto',num:1},
+    {k:'partos',t:'Partos',num:1},
+    {k:'pn_prom',t:'PN prom',num:1},
+    {k:'destete_prom',t:'Destete prom',num:1},
+    {k:'eficiencia',t:'Efic. %',num:1,fmt:v=>v==null?'—':`<span class="${v>=55?'bi':v<45?'al':''}">${v}%</span>`},
+    {k:'ipp',t:'Int. partos',num:1,fmt:v=>v==null?'—':`<span class="${v>420?'al':''}">${v}</span>`},
+    {k:'padre',t:'Padre',cls:'mut',oculta:1},
+    {k:'servicio',t:'Servicio',cls:'mut',oculta:1,fmt:v=>fec(v)||'—'},
+    {k:'padre_servicio',t:'Padre servicio',cls:'mut',oculta:1},
+    {k:'fpp',t:'F. prob. parto',cls:'mut',oculta:1,fmt:v=>fec(v)||'—'},
+    {k:'ternero',t:'Ternero',fmt:(v,f)=>v?esc(v):(f.estado==='PREÑADA'?'<span class="mut">por parir</span>':'<span class="mut">—</span>')},
+    {k:'parto',t:'Parto',cls:'mut',oculta:1,fmt:v=>fec(v)||'—'},
+    {k:'peso_nac',t:'PN ternero',num:1,oculta:1},
+    {k:'tacto',t:'Tacto',cls:'mut',fmt:v=>esc(String(v||'').replace(/PREÑADA_?/,''))||'—'},
+    {k:'bloque',t:'Bloque real',fmt:v=>tag(v)},
+    {k:'estado',t:'Estado',fmt:(v,f)=>f.causa_texto?`<span class="al">${esc(f.causa_texto)}</span>`:tag(v)}
+  ]},
+  toros: { titulo:'Toros', conjunto:'toros', cols:[
+    {k:'rp',t:'RP',cls:'rp'},
+    {k:'nombre',t:'Nombre',fmt:v=>v?`<b>${esc(v)}</b>`:'<span class="mut">—</span>'},
+    {k:'hba',t:'HBA',cls:'mut'},
+    {k:'pelo',t:'Pelaje',fmt:v=>punto(v)},
+    {k:'edad_meses',t:'Edad (m)',num:1},
+    {k:'peso_actual',t:'Peso',num:1},
+    {k:'ultima_pesada',t:'Última pesada',cls:'mut',fmt:(v,f)=>v?fec(v)+(f.dias_sin_pesar>180?` <span class="al">+${f.dias_sin_pesar}d</span>`:''):'<span class="al">nunca</span>'},
+    {k:'ce',t:'CE',num:1},
+    {k:'hijos',t:'Hijos',num:1,fmt:v=>v?`<b>${v}</b>`:'<span class="mut">0</span>'},
+    {k:'hijos_anio',t:'Hijos del año',num:1},
+    {k:'pn_prom_hijos',t:'PN prom hijos',num:1},
+    {k:'destete_prom_hijos',t:'Destete prom hijos',num:1,fmt:v=>v==null?'—':`<span class="${v>=220?'bi':v<180?'al':''}">${v}</span>`},
+    {k:'servicios',t:'Servicios',num:1,oculta:1},
+    {k:'temporadas',t:'Temporadas',cls:'mut'},
+    {k:'prenez',t:'Preñez %',num:1,oculta:1,fmt:v=>v==null?'—':v+'%'},
+    {k:'lote',t:'Lote',cls:'mut'},
+    {k:'destino',t:'Destino',fmt:(v,f)=>v?`<span class="tag ${f.salio?'t-vendido':'t-preñada'}">${esc(v)}</span>`:'<span class="mut">—</span>'},
+    {k:'categoria',t:'Categoría',cls:'mut',oculta:1}
+  ]},
+  nac: { titulo:'Nacimientos', conjunto:'nacimientos', cols:[
+    {k:'rp',t:'RP',cls:'rp',fmt:(v,f)=>f.rp_provisorio?`<span style="color:#B8860B">${esc(v)}</span> <span class="tag t-cola">sin RP</span>`:esc(v)},
+    {k:'caravana_control',t:'Caravana control',fmt:(v,f)=>v?`<b>${esc(v)}</b>${f.caravana_color?' <span class="mut">'+esc(f.caravana_color)+'</span>':''}`:'<span class="mut">—</span>'},
+    {k:'fecha_nac',t:'Nacimiento',cls:'mut',fmt:v=>fec(v)||'—'},
+    {k:'bloque',t:'Bloque',fmt:v=>tag(v)},
+    {k:'sexo',t:'Sexo',fmt:v=>sexo(v)},
+    {k:'pelo',t:'Pelaje',fmt:v=>punto(v)},
+    {k:'madre_rp',t:'Madre',fmt:(v)=>v?esc(v):'<span class="al">falta</span>'},
+    {k:'padre_rp',t:'Padre'},
+    {k:'peso_nac',t:'P. nacer',num:1,fmt:v=>v==null?'<span class="al">falta</span>':v},
+    {k:'destete',t:'Destete',num:1},
+    {k:'peso_actual',t:'Último peso',num:1,oculta:1},
+    {k:'chip',t:'Caravana',cls:'mut',fmt:v=>v?esc(v):'<span class="mut">—</span>'},
+    {k:'estado',t:'Estado',fmt:v=>tag(v||'ACTIVO')}
+  ]},
+  recria: { titulo:'Recría', conjunto:'recria', cols:[
+    {k:'rp',t:'RP',cls:'rp'},
+    {k:'fecha_nac',t:'Nacimiento',cls:'mut',fmt:v=>fec(v)||'—'},
+    {k:'edad_meses',t:'Edad (m)',num:1},
+    {k:'sexo',t:'Sexo',fmt:v=>sexo(v)},
+    {k:'padre_rp',t:'Padre'},
+    {k:'madre_rp',t:'Madre',oculta:1},
+    {k:'destete',t:'Destete',num:1},
+    {k:'peso_actual',t:'Peso',num:1},
+    {k:'ultima_pesada',t:'Última pesada',cls:'mut',fmt:(v,f)=>v?fec(v)+(f.dias_sin_pesar>90?` <span class="al">+${f.dias_sin_pesar}d</span>`:''):'<span class="al">nunca</span>'},
+    {k:'gdp_destete',t:'GDP',num:1,fmt:v=>v==null?'—':`<span class="${v>=0.7?'bi':v<0.4?'al':''}">${v}</span>`},
+    {k:'lote_actual',t:'Lote',cls:'mut'},
+    {k:'categoria',t:'Categoría',cls:'mut'}
+  ]},
+  term: { titulo:'Terminación', conjunto:'terminacion', cols:[
+    {k:'rp',t:'RP',cls:'rp'},
+    {k:'origen',t:'Origen',fmt:v=>v==='corral'?'<span class="tag t-cabeza">en corral</span>':'<span class="tag t-cola">marcado</span>'},
+    {k:'lote',t:'Lote',cls:'mut'},
+    {k:'potrero',t:'Potrero',cls:'mut',oculta:1},
+    {k:'destino',t:'Destino',cls:'mut',fmt:v=>v?esc(v):'<span class="mut">—</span>'},
+    {k:'categoria',t:'Categoría',cls:'mut'},
+    {k:'meses',t:'Edad (m)',num:1},
+    {k:'fecha_ingreso',t:'Ingresó',cls:'mut',fmt:v=>fec(v)||'—'},
+    {k:'dias_corral',t:'Días',num:1},
+    {k:'peso_entrada',t:'P. entrada',num:1},
+    {k:'peso_actual',t:'Peso',num:1,fmt:v=>v==null?'—':`<b>${v}</b>`},
+    {k:'ganancia',t:'Ganó',num:1,fmt:v=>v==null?'—':`<span class="${v>0?'bi':'al'}">${v>0?'+':''}${v}</span>`},
+    {k:'gdp',t:'GDP',num:1,fmt:v=>v==null?'—':`<span class="${v>=1.2?'bi':v<0.8?'al':''}">${v}</span>`},
+    {k:'ultima_pesada',t:'Última pesada',cls:'mut',fmt:(v,f)=>v?fec(v)+(f.dias_sin_pesar>30?` <span class="al">+${f.dias_sin_pesar}d</span>`:''):'—'}
+  ]},
+  dest: { titulo:'Destinos', conjunto:'destinos', cols:[
+    {k:'rp',t:'RP',cls:'rp'},
+    {k:'destino',t:'Destino',fmt:(v,f)=>`<span class="tag ${f.positivo===true?'t-destetó':f.positivo===false?'t-falló':'t-preñada'}">${esc(v)}</span>`},
+    {k:'motivo_texto',t:'Motivo',cls:'mut'},
+    {k:'categoria',t:'Categoría',cls:'mut'},
+    {k:'edad_meses',t:'Edad (m)',num:1},
+    {k:'peso_adulto',t:'Peso',num:1},
+    {k:'partos',t:'Partos',num:1},
+    {k:'destete_prom',t:'Destete prom',num:1},
+    {k:'eficiencia',t:'Efic. %',num:1,fmt:v=>v==null?'—':v+'%'},
+    {k:'fecha',t:'Decidido',cls:'mut',fmt:v=>fec(v)||'—'},
+    {k:'concretado',t:'Salió',fmt:(v,f)=>v?`<span class="bi">${fec(f.fecha_salida)||'sí'}</span>`:'<span class="mut">pendiente</span>'},
+    {k:'nota',t:'Nota',cls:'mut'}
+  ]},
+  fallos: { titulo:'No destetaron', conjunto:'fallos', cols:[
+    {k:'rp',t:'RP',cls:'rp'},
+    {k:'causa_texto',t:'Motivo',fmt:v=>`<span class="al">${esc(v||'—')}</span>`},
+    {k:'tacto',t:'Tacto',cls:'mut',fmt:v=>esc(String(v||'').replace(/PREÑADA_?/,''))||'—'},
+    {k:'servicio',t:'Servicio',cls:'mut',fmt:v=>fec(v)||'—'},
+    {k:'fpp',t:'F. prob. parto',cls:'mut',fmt:v=>fec(v)||'—'},
+    {k:'edad_meses',t:'Edad (m)',num:1},
+    {k:'peso_adulto',t:'P. adulto',num:1},
+    {k:'partos',t:'Partos',num:1},
+    {k:'destete_prom',t:'Destete prom',num:1},
+    {k:'eficiencia',t:'Efic. %',num:1,fmt:v=>v==null?'—':v+'%'}
+  ]},
+  animales: { titulo:'Todos los animales', conjunto:'animales', cols:[
+    {k:'rp',t:'RP',cls:'rp'},
+    {k:'chip',t:'Caravana',cls:'mut',fmt:v=>v?esc(v):'<span class="mut">—</span>'},
+    {k:'sexo',t:'Sexo',fmt:v=>sexo(v)},
+    {k:'categoria',t:'Categoría',cls:'mut'},
+    {k:'estado',t:'Estado',fmt:v=>tag(v||'ACTIVO')},
+    {k:'fecha_nac',t:'Nacimiento',cls:'mut',fmt:v=>fec(v)||'—'},
+    {k:'edad_meses',t:'Edad (m)',num:1},
+    {k:'pelo',t:'Pelaje',fmt:v=>punto(v)},
+    {k:'madre_rp',t:'Madre'},
+    {k:'padre_rp',t:'Padre'},
+    {k:'peso_nac',t:'P. nacer',num:1,oculta:1},
+    {k:'destete',t:'Destete',num:1},
+    {k:'peso_actual',t:'Último peso',num:1},
+    {k:'ultima_pesada',t:'Última pesada',cls:'mut',fmt:v=>fec(v)||'—'},
+    {k:'crias',t:'Crías',num:1,oculta:1},
+    {k:'lote_actual',t:'Lote',cls:'mut'}
+  ]}
+};
+
+// ── Carga ────────────────────────────────────────────────────────────────────
+async function cargar(){
+  try{
+    fetch(`${API}/api/salud`).then(r=>r.json()).then(s=>{ if(s.modelo) document.getElementById('chModelo').textContent = s.modelo + (s.esfuerzo?' · esfuerzo '+s.esfuerzo:''); }).catch(()=>{});
+    // Sólo los campos de la empresa que entró (la del campo pedido, o la pedida por nombre).
+    const q = empresaPedida ? `?empresa=${encodeURIComponent(empresaPedida)}` : campo ? `?de_campo=${encodeURIComponent(campo)}` : '';
+    let campos = await fetch(`${API}/api/campos${q}`).then(r=>r.json());
+    if(!campos.length) campos = await fetch(`${API}/api/campos`).then(r=>r.json());
+    const sel=document.getElementById('selCampo');
+    sel.innerHTML = campos.map(c=>`<option value="${c.key}" ${c.key===campo?'selected':''}>${esc(c.nombre)} — ${c.animales} cab.</option>`).join('');
+    sel.style.display = campos.length>1?'':'none';
+    const act = campos.find(c=>c.key===campo)||campos[0];
+    if(act){ campo=act.key; document.getElementById('hBrand').textContent=act.nombre.toUpperCase();
+      empresaActual = act.empresa; document.getElementById('tabEmpresa').style.display = (act.campos_empresa>1)?'':'none'; }
+    camposTodos = campos;
+  }catch(e){}
+  try{
+    const [pl, an, te, de, to] = await Promise.all([
+      fetch(urlCampo('/api/plantel')).then(r=>r.json()),
+      fetch(urlCampo('/api/animales?estado=TODOS')).then(r=>r.json()),
+      fetch(urlCampo('/api/terminacion')).then(r=>r.json()).catch(()=>null),
+      fetch(urlCampo('/api/destinos')).then(r=>r.json()).catch(()=>null),
+      fetch(urlCampo('/api/toros')).then(r=>r.json()).catch(()=>null)
+    ]);
+    if(pl.error) throw new Error(pl.error);
+    const todos = Array.isArray(an)?an:[];
+    D = { plantel: pl, todos, animales: todos.filter(a=>String(a.estado||'ACTIVO').toUpperCase()==='ACTIVO'),
+          terminacion: (te && !te.error) ? te : { filas:[], resumen:{} },
+          destinos: (de && !de.error) ? de : { filas:[], candidatos:[], resumen:{} },
+          toros: (to && !to.error) ? to : { filas:[], resumen:{} } };
+    document.getElementById('hSub').textContent =
+      `${pl.filas.length} vientres · parición ${pl.anio_paricion} · ${D.animales.length} animales activos`;
+    llenarFiltros(); pintar(); if(!document.getElementById('msgs').children.length) cargarConversacion();
+    if(vista==='archivos') pintarArchivos();   // relevar no se redibuja: se perdería lo que se está cargando
+  }catch(e){
+    document.getElementById('hSub').textContent = e.message;
+    document.getElementById('tbody').innerHTML=`<tr><td colspan="15" class="vacio">${esc(e.message)}</td></tr>`;
+  }
+}
+function cambiarCampo(){
+  campo=document.getElementById('selCampo').value; localStorage.setItem('campo',campo);
+  // Dentro del portal el campo viene en la URL: se actualiza ahí también, si no al recargar vuelve el anterior.
+  const u=new URL(location.href); u.searchParams.set('campo',campo); location.href=u.toString();
+}
+
+function llenarFiltros(){
+  const filas = datosDe(vista);
+  const uniq = k => [...new Set(filas.map(f=>f[k]).filter(Boolean))].sort();
+  const sel=(id,vals,pre)=>{
+    const e=document.getElementById(id), act=e.value;
+    e.innerHTML=`<option value="">${pre}</option>`+vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
+    e.value = vals.includes(act)?act:'';
+  };
+  sel('fpel', uniq('pelo'), 'Pelaje: todos');
+  sel('fcat', uniq('categoria'), 'Categoría: todas');
+  sel('fest', uniq('estado'), 'Estado: todos');
+  document.getElementById('fsex').style.display = ['animales','nac','recria'].includes(vista)?'':'none';
+  document.getElementById('fblo').style.display = ['plantel','nac'].includes(vista)?'':'none';
+  if(vista==='animales' && !document.getElementById('fest').value) document.getElementById('fest').value='ACTIVO';
+}
+
+function datosDe(v){
+  if(!D) return [];
+  if(v==='plantel') return D.plantel.filas;
+  if(v==='fallos') return D.plantel.filas.filter(f=>f.estado==='FALLÓ');
+  if(v==='term') return D.terminacion.filas;
+  if(v==='toros') return D.toros.filas;
+  if(v==='dest') return D.destinos.filas;
+  if(v==='animales') return D.todos;
+  const anio = D.plantel.anio_paricion, cortes = D.plantel.calendario && D.plantel.calendario.cortes;
+  if(v==='nac') return D.todos.filter(a=>String(a.fecha_nac||'').startsWith(anio) && a.madre_rp).map(a=>({...a, bloque: bloqueDe(a.fecha_nac, cortes)}));
+  if(v==='recria') return D.animales.filter(a=>a.edad_meses!=null && a.edad_meses>=6 && a.edad_meses<=20);
+  return [];
+}
+function bloqueDe(f, c){
+  if(!f) return null;
+  if(c && c.referencia){ if(f<=c.CABEZA) return 'CABEZA'; if(f<=c.CUERPO) return 'CUERPO'; if(f<=c.COLA) return 'COLA'; return 'TARDIA'; }
+  const md=String(f).slice(5,10); return md<='08-31'?'CABEZA':md<='09-30'?'CUERPO':md<='10-31'?'COLA':'TARDIA';
+}
+const colsVisibles = () => VISTAS[vista].cols.filter(c=>{ const o=colsOcultas[vista]||{}; return o[c.k]===undefined ? !c.oculta : !o[c.k]; });
+
+function pintar(){
+  if(!D || !VISTAS[vista]) return;
+  const R = D.plantel.resumen;
+  const conf = VISTAS[vista];
+  const filas = filtrar();
+  const cols = colsVisibles();
+
+  const kp = vista==='plantel' ? [
+    [D.plantel.filas.length,'Vientres','',''],
+    [R.prenadas,'Preñadas','bien','PREÑADA'],
+    [R.criando,'Criando','','CRIANDO'],
+    [R.destetaron,'Destetaron','bien','DESTETÓ'],
+    [R.fallaron,'No destetaron',R.fallaron?'al':'','FALLÓ'],
+    [R.destete_efectivo!=null?R.destete_efectivo+'%':'—','Destete efectivo','',''],
+    [R.peso_adulto_prom||'—','P. adulto prom','',''],
+    [R.destete_prom||'—','Destete prom','',''],
+    [R.eficiencia_prom!=null?R.eficiencia_prom+'%':'—','Eficiencia','oro',''],
+    [R.ipp_prom||'—','Int. partos','','']
+  ] : vista==='term' ? (()=>{ const T=D.terminacion.resumen; return [
+      [T.total||0,'Terminando','',''],
+      [T.en_corral||0,'En corral','',''],
+      [T.marcados||0,'Marcados sin corral',T.marcados?'oro':'',''],
+      [T.peso_prom||'—','Peso prom kg','',''],
+      [T.gdp_prom||'—','GDP promedio',T.gdp_prom>=1.1?'bien':T.gdp_prom<0.8?'al':'',''],
+      [T.ganancia_prom!=null?'+'+T.ganancia_prom:'—','Ganó prom kg','bien',''],
+      [T.dias_prom||'—','Días en corral','',''],
+      [T.kg_totales||'—','Kg totales','oro',''],
+      [T.sin_pesar||0,'Sin pesar +30d',T.sin_pesar?'al':'','']
+    ]; })()
+    : vista==='dest' ? (()=>{ const T=D.destinos.resumen; const pd=T.por_destino||{}; return [
+        [T.marcados||0,'Marcados','',''],
+        [T.pendientes||0,'Sin salir','',''],
+        [T.concretados||0,'Ya salieron','bien',''],
+        [pd['TORO REPRODUCTOR']||0,'Reproductores','bien',''],
+        [pd['TERMINACION']||0,'A terminación','',''],
+        [pd['VENTA PREÑADA']||0,'Venta preñada','',''],
+        [T.candidatos||0,'Candidatos sin marcar', T.candidatos?'al':'','']
+      ]; })()
+    : vista==='toros' ? (()=>{ const T=D.toros.resumen; return [
+        [T.total||0,'Toros','',''],
+        [T.con_hijos_anio||0,'Con hijos este año','bien',''],
+        [T.hijos_anio||0,'Hijos '+(D.toros.anio||''),'',''],
+        [T.hijos_totales||0,'Hijos registrados','',''],
+        [T.pn_prom_hijos||'—','PN prom hijos','',''],
+        [T.destete_prom_hijos||'—','Destete prom hijos','oro',''],
+        [T.destinados||0,'Con destino de salida',T.destinados?'oro':'',''],
+        [T.sin_pesar||0,'Sin pesar +6 meses',T.sin_pesar?'al':'','']
+      ]; })()
+    : vista==='nac' ? (()=>{ const f=datosDe('nac'); const pb=R.por_bloque||{}; const sinPn=f.filter(a=>a.peso_nac==null).length; return [
+        [f.length,'Nacidos '+D.plantel.anio_paricion,'',''],
+        [f.filter(a=>String(a.sexo||'').startsWith('M')).length,'Machos','',''],
+        [f.filter(a=>String(a.sexo||'').startsWith('H')).length,'Hembras','',''],
+        [pb.CABEZA||0,'Cabeza','bien',''],[pb.CUERPO||0,'Cuerpo','',''],[(pb.COLA||0)+(pb.TARDIA||0),'Cola y tardía','',''],
+        [R.prenadas||0,'Por parir','',''],
+        [f.filter(a=>a.rp_provisorio).length,'Sin RP definitivo',f.some(a=>a.rp_provisorio)?'oro':'',''],
+        [sinPn,'Sin peso al nacer',sinPn?'al':'','']
+      ]; })()
+    : vista==='recria' ? (()=>{ const f=datosDe('recria'); const g=f.map(a=>a.gdp_destete).filter(x=>x!=null); const sp=f.filter(a=>a.dias_sin_pesar==null||a.dias_sin_pesar>90).length; return [
+        [f.length,'En recría','',''],
+        [f.filter(a=>String(a.sexo||'').startsWith('M')).length,'Machos','',''],
+        [f.filter(a=>String(a.sexo||'').startsWith('H')).length,'Hembras','',''],
+        [g.length?Math.round(g.reduce((a,b)=>a+b,0)/g.length*1000)/1000:'—','GDP prom desde destete','oro',''],
+        [sp,'Sin pesar +90d',sp?'al':'','']
+      ]; })()
+    : vista==='animales' ? (()=>{ const t=D.todos; const por=e=>t.filter(a=>String(a.estado||'ACTIVO').toUpperCase()===e).length; return [
+        [t.length,'Registrados','',''],[por('ACTIVO'),'Activos','bien','ACTIVO'],[por('VENDIDO'),'Vendidos','','VENDIDO'],[por('MUERTO'),'Muertos',por('MUERTO')?'al':'','MUERTO'],
+        [D.animales.filter(a=>String(a.sexo||'').startsWith('M')).length,'Machos activos','',''],
+        [D.animales.filter(a=>String(a.sexo||'').startsWith('H')).length,'Hembras activas','','']
+      ]; })()
+    : [[filas.length, conf.titulo,'','']];
+  document.getElementById('kpis').innerHTML = kp.map(([n,t,c,f])=>
+    `<div class="kpi ${c||''}" onclick="filtrarEstado('${f||''}')"><b>${n}</b><span>${t}</span></div>`).join('');
+
+  document.getElementById('avisos').innerHTML =
+    (vista==='plantel' && R.avisos && R.avisos.length)
+      ? R.avisos.map(a=>`<div class="aviso"><b>${a.n}</b> ${esc(a.texto)}</div>`).join('')
+    : (vista==='dest' && D.destinos.candidatos && D.destinos.candidatos.length)
+      ? `<div class="aviso"><b>${D.destinos.candidatos.length}</b> sin destino marcado:
+         ${D.destinos.candidatos.slice(0,10).map(c=>esc(c.rp)).join(', ')}${
+         D.destinos.candidatos.length>10?` y ${D.destinos.candidatos.length-10} más`:''}
+         — pedile al chat que los marque</div>` : '';
+
+  document.getElementById('thead').innerHTML = cols.map(c=>
+    `<th class="${c.num?'num':''}" onclick="ordenar('${c.k}')">${c.t}${
+      orden.col===c.k?`<span class="fl">${orden.desc?'▼':'▲'}</span>`:''}</th>`).join('');
+  document.getElementById('colsList').innerHTML = conf.cols.map(c=>
+    `<label><input type="checkbox" ${cols.includes(c)?'checked':''} onchange="toggleCol('${c.k}',this.checked)"> ${c.t}</label>`).join('');
+
+  document.getElementById('cnt').textContent = `${filas.length} de ${datosDe(vista).length}`;
+  document.getElementById('expN').textContent = `${filas.length} filas`;
+  document.getElementById('tbody').innerHTML = filas.length ? filas.map(f=>
+    `<tr class="${f.estado==='FALLÓ'?'fallo':''}" onclick="abrirFicha('${esc(f.rp)}')">${
+      cols.map(c=>{
+        const v=f[c.k];
+        const txt=c.fmt?c.fmt(v,f):(v==null||v===''?'<span class="mut">—</span>':esc(v));
+        return `<td class="${c.cls||''} ${c.num?'num':''}">${txt}</td>`;
+      }).join('')}</tr>`).join('')
+    : `<tr><td colspan="${cols.length}" class="vacio">Nada con esos filtros</td></tr>`;
+}
+
+function filtrar(){
+  const q=(document.getElementById('q').value||'').trim();
+  const nq=norm(q), cq=compacto(q);
+  const fp=document.getElementById('fpel').value, fc=document.getElementById('fcat').value;
+  const fe=document.getElementById('fest').value, fb=document.getElementById('fblo').value, fs=document.getElementById('fsex').value;
+  let filas = datosDe(vista).filter(f=>{
+    if(fp && f.pelo!==fp) return false;
+    if(fc && f.categoria!==fc) return false;
+    if(fe && String(f.estado||'ACTIVO')!==fe) return false;
+    if(fb && f.bloque!==fb) return false;
+    if(fs && !String(f.sexo||'').toUpperCase().startsWith(fs)) return false;
+    if(q){
+      const claves=[f.rp,f.nombre,f.hba,f.chip,f.padre,f.padre_rp,f.madre,f.madre_rp,f.ternero,f.lote,f.lote_actual,f.potrero,f.destino,f.motivo_texto,f.causa_texto,f.nota,f.temporadas].filter(Boolean);
+      const ok = claves.some(v=>{ const n=norm(v); return n.includes(nq) || compacto(v)===cq; });
+      if(!ok) return false;
+    }
+    return true;
+  });
+  const c=orden.col;
+  filas = [...filas].sort((a,b)=>{
+    let x=a[c], y=b[c];
+    if(x==null&&y==null) return 0;
+    if(x==null) return 1; if(y==null) return -1;
+    const r=(typeof x==='number'&&typeof y==='number')?x-y:String(x).localeCompare(String(y),'es',{numeric:true});
+    return orden.desc?-r:r;
+  });
+  return filas;
+}
+function descripcionFiltros(){
+  const p=[]; const q=document.getElementById('q').value.trim(); if(q) p.push(`busca "${q}"`);
+  for(const [id,n] of [['fpel','pelaje'],['fcat','categoría'],['fest','estado'],['fblo','bloque'],['fsex','sexo']]){ const v=document.getElementById(id).value; if(v) p.push(`${n} ${v}`); }
+  return p.join(', ');
+}
+function ordenar(c){ if(orden.col===c) orden.desc=!orden.desc; else {orden.col=c;orden.desc=false;} pintar(); }
+function filtrarEstado(e){ if(!['plantel','animales'].includes(vista)) return; document.getElementById('fest').value = e||''; pintar(); }
+function limpiarFiltros(){ ['q','fpel','fcat','fest','fblo','fsex'].forEach(i=>document.getElementById(i).value=''); pintar(); }
+function toggleCol(k,on){ colsOcultas[vista]=colsOcultas[vista]||{}; colsOcultas[vista][k]=!on; localStorage.setItem('colsOcultas',JSON.stringify(colsOcultas)); pintar(); }
+function resetCols(){ delete colsOcultas[vista]; localStorage.setItem('colsOcultas',JSON.stringify(colsOcultas)); pintar(); }
+function toggleMenu(id){
+  const m=document.getElementById(id); const on=m.classList.contains('on');
+  document.querySelectorAll('.menu').forEach(x=>x.classList.remove('on'));
+  if(on) return;
+  m.classList.add('on');
+  // Si el menú se sale por la derecha, se abre hacia la izquierda.
+  const dd=m.querySelector('.dd'); dd.style.left='0'; dd.style.right='auto';
+  const r=dd.getBoundingClientRect();
+  if(r.right>window.innerWidth-8){ dd.style.left='auto'; dd.style.right='0'; }
+  if(dd.getBoundingClientRect().left<8){ dd.style.left='0'; dd.style.right='auto'; }
+}
+document.addEventListener('click',e=>{ if(!e.target.closest('.menu')) document.querySelectorAll('.menu').forEach(x=>x.classList.remove('on')); if(!e.target.closest('.gs')) document.getElementById('gsr').classList.remove('on'); });
+
+function verVista(el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  el.classList.add('on'); vista=el.dataset.v;
+  const esTabla = !!VISTAS[vista];
+  document.getElementById('tablaVista').style.display = esTabla?'':'none';
+  document.getElementById('relevarVista').style.display = vista==='relevar'?'':'none';
+  document.getElementById('archivosVista').style.display = vista==='archivos'?'':'none';
+  document.getElementById('empresaVista').style.display = vista==='empresa'?'':'none';
+  if(vista==='empresa') pintarEmpresa();
+  if(esTabla){ limpiarFiltros(); orden={col:'rp',desc:false}; llenarFiltros(); pintar(); }
+  if(vista==='relevar') pintarRelevar();
+  if(vista==='archivos') pintarArchivos();
+}
+
+// ── Exportar ─────────────────────────────────────────────────────────────────
+async function bajar(url, opciones){
+  try{
+    const r = await fetch(url, opciones);
+    if(!r.ok){ let e='Error '+r.status; try{ e=(await r.json()).error||e; }catch(x){} throw new Error(e); }
+    const cd = r.headers.get('Content-Disposition')||'';
+    const m = cd.match(/filename\*=UTF-8''([^;]+)/); const nombre = m?decodeURIComponent(m[1]):'archivo';
+    const blob = await r.blob();
+    if(/html/.test(r.headers.get('Content-Type')||'') && !cd){ window.open(URL.createObjectURL(blob),'_blank'); return; }
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=nombre; a.click();
+    toast(`Bajando ${nombre}`);
+  }catch(e){ toast('No pude: '+e.message, 4000); }
+}
+function bajarUrl(path){ bajar(urlCampo(path)); }
+function exportar(formato){
+  const conf=VISTAS[vista]; const filas=filtrar(); const cols=colsVisibles();
+  const body = { conjunto: conf.conjunto, formato, rps: filas.map(f=>f.rp), columnas: cols.map(c=>c.k),
+    filtro: descripcionFiltros(), orden, campo, estado: vista==='animales' ? 'TODOS' : undefined };
+  if(formato==='html'){
+    // Para imprimir se abre en otra pestaña con lo mismo que se ve.
+    const f=document.createElement('form'); f.method='POST'; f.action=urlCampo('/api/exportar'); f.target='_blank';
+    for(const [k,v] of Object.entries(body)){ if(v===undefined) continue; const i=document.createElement('input'); i.type='hidden'; i.name=k; i.value=typeof v==='object'?JSON.stringify(v):v; f.appendChild(i); }
+    document.body.appendChild(f); f.submit(); f.remove(); return;
+  }
+  bajar(urlCampo('/api/exportar'), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+}
+function planillaDeVista(formato){
+  const filas=filtrar();
+  const body={ rps: filas.map(f=>f.rp), titulo:`Relevamiento ${VISTAS[vista].titulo}${descripcionFiltros()?' · '+descripcionFiltros():''}`, formato, campo };
+  if(formato==='html'){
+    const f=document.createElement('form'); f.method='POST'; f.action=urlCampo('/api/planilla'); f.target='_blank';
+    for(const [k,v] of Object.entries(body)){ const i=document.createElement('input'); i.type='hidden'; i.name=k; i.value=typeof v==='object'?JSON.stringify(v):v; f.appendChild(i); }
+    document.body.appendChild(f); f.submit(); f.remove(); return;
+  }
+  bajar(urlCampo('/api/planilla'), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+}
+
+// ── Buscador global ──────────────────────────────────────────────────────────
+let gsT=null, gsSel=-1, gsHits=[];
+function buscarGlobal(){
+  const q=document.getElementById('gq').value.trim(); const box=document.getElementById('gsr');
+  clearTimeout(gsT);
+  if(!q){ box.classList.remove('on'); return; }
+  gsT=setTimeout(async()=>{
+    try{
+      gsHits = await fetch(urlCampo(`/api/buscar?q=${encodeURIComponent(q)}&limite=25`)).then(r=>r.json());
+      gsSel = gsHits.length?0:-1;
+      box.innerHTML = gsHits.length ? gsHits.map((a,i)=>`<div class="r ${i===gsSel?'sel':''}" onmousedown="irA('${esc(a.rp)}')">
+        <b>${esc(a.rp)}</b>
+        <span class="d">${a.nombre?'<b>'+esc(a.nombre)+'</b> · ':''}${a.rp_provisorio?'<span style="color:#B8860B">sin RP</span> · ':''}${a.caravana_control?'control '+esc(a.caravana_control)+(a.caravana_color?' '+esc(a.caravana_color):'')+' · ':''}${esc(a.categoria||'')} · ${sexo(a.sexo)}${a.pelo?' · '+esc(a.pelo):''}${a.fecha_nac?' · nac. '+fec(a.fecha_nac):''}${a.peso_actual?' · '+a.peso_actual+' kg':''}${a.madre_rp?' · madre '+esc(a.madre_rp):''}${a.padre_rp?' · padre '+esc(a.padre_rp):''}${a.estado&&a.estado!=='ACTIVO'?' · <span class="al">'+esc(a.estado)+'</span>':''}</span>
+        <span class="c">${esc(a.coincide||'')}</span></div>`).join('')
+        : `<div class="vacio">Nada con "${esc(q)}"</div>`;
+      box.classList.add('on');
+    }catch(e){}
+  }, 160);
+}
+function teclaBuscar(e){
+  const box=document.getElementById('gsr');
+  if(e.key==='Escape'){ box.classList.remove('on'); e.target.blur(); return; }
+  if(!gsHits.length) return;
+  if(e.key==='ArrowDown'){ gsSel=Math.min(gsSel+1,gsHits.length-1); e.preventDefault(); }
+  else if(e.key==='ArrowUp'){ gsSel=Math.max(gsSel-1,0); e.preventDefault(); }
+  else if(e.key==='Enter'){ if(gsSel>=0) irA(gsHits[gsSel].rp); return; }
+  else return;
+  [...box.querySelectorAll('.r')].forEach((r,i)=>r.classList.toggle('sel',i===gsSel));
+}
+function irA(rp){ document.getElementById('gsr').classList.remove('on'); document.getElementById('gq').value=''; abrirFicha(rp); }
+document.addEventListener('keydown',e=>{
+  if(e.key==='/' && !/input|textarea|select/i.test(e.target.tagName)){ e.preventDefault(); document.getElementById('gq').focus(); }
+  if(e.key==='Escape' && document.getElementById('ov').classList.contains('on')) cerrarFicha();
+});
+
+// ── Ficha ────────────────────────────────────────────────────────────────────
+let fichaActual=null;
+function cerrarFicha(){ document.getElementById('ov').classList.remove('on'); }
+async function abrirFicha(rp){
+  document.getElementById('ovCard').innerHTML='<div class="cb"><div class="vacio">Cargando…</div></div>';
+  document.getElementById('ov').classList.add('on');
+  let f;
+  try{
+    f = await fetch(urlCampo(`/api/ficha/${encodeURIComponent(rp)}`)).then(r=>r.json());
+    if(!f.ok) throw new Error(f.error);
+  }catch(e){
+    document.getElementById('ovCard').innerHTML=`<div class="cb"><div class="vacio">${esc(e.message)}</div></div>`;
+    return;
+  }
+  fichaActual=f;
+  const link = rp => rp ? `<a href="#" onclick="abrirFicha('${esc(rp)}');return false">${esc(rp)}</a>` : '—';
+  const O = f.origen || { nacimiento:f.fecha_nac, peso_nacer:f.peso_nac, padre:f.padre, madre:f.madre, hba:f.hba, caravana:f.chip };
+  const hijos = f.hijos||[];
+  const cab = f.vientre ? `
+      <div class="fk">
+        <div><span>Edad</span><b>${f.edad_meses!=null?f.edad_meses+' M':'—'}</b></div>
+        <div><span>Peso adulto</span><b>${f.peso_adulto?f.peso_adulto+' KG':'—'}</b></div>
+        <div><span>Partos</span><b>${f.partos}</b></div>
+        <div><span>PN promedio</span><b>${f.pn_prom??'—'}</b></div>
+        <div><span>Destete prom</span><b>${f.destete_prom??'—'}</b></div>
+        <div><span>Eficiencia</span><b class="${f.eficiencia>=55?'bi':f.eficiencia<45?'al':''}">${f.eficiencia?f.eficiencia+'%':'—'}</b></div>
+        <div><span>Interv. partos</span><b>${f.ipp?f.ipp+' D':'—'}</b></div>
+        <div><span>Estado ${D?D.plantel.anio_paricion:''}</span><b class="s">${f.causa_texto?`<span class="al">${esc(f.causa_texto)}</span>`:tag(f.estado)}</b></div>
+      </div>` : `
+      <div class="fk">
+        <div><span>Edad</span><b>${f.edad_meses!=null?f.edad_meses+' M':'—'}</b></div>
+        <div><span>Último peso</span><b>${f.peso_actual?f.peso_actual+' KG':'—'}</b></div>
+        <div><span>Última pesada</span><b class="s">${f.ultima_pesada?fec(f.ultima_pesada)+(f.dias_sin_pesar>60?` <span class="al">+${f.dias_sin_pesar}d</span>`:''):'—'}</b></div>
+        <div><span>GDP última</span><b class="${f.gdp_ultima>=0.8?'bi':f.gdp_ultima!=null&&f.gdp_ultima<0.4?'al':''}">${f.gdp_ultima??'—'}</b></div>
+        <div><span>GDP de vida</span><b>${f.gdp_total??'—'}</b></div>
+        <div><span>Destete</span><b>${f.destete??'—'}</b></div>
+        <div><span>Lote</span><b class="s">${esc(f.lote||'—')}${f.potrero?` <span class="mut">${esc(f.potrero)}</span>`:''}</b></div>
+        <div><span>Estado</span><b class="s">${tag(f.estado)}</b></div>
+      </div>`;
+
+  document.getElementById('ovCard').innerHTML=`
+    <div class="ct">
+      <div><h2>${esc(f.rp)}${f.nombre?` <span style="font-weight:300;font-size:20px">${esc(f.nombre)}</span>`:''}</h2><div class="id">${esc(f.categoria||'')} · ${sexo(f.sexo)}${f.hba?` · ${esc(f.hba)}`:''}${f.pelo?` · ${esc(f.pelo)}`:''}</div></div>
+      <div class="acc">
+        <button onclick="pesarDesdeFicha()">+ Pesar</button>
+        <a href="${urlCampo('/api/exportar/pesadas.xlsx?rps='+encodeURIComponent(f.rp))}">⇩ Pesadas</a>
+        <button onclick="preguntarPor('${esc(f.rp)}')">Preguntar</button>
+        <button onclick="cerrarFicha()">✕</button>
+      </div>
+    </div>
+    <div class="cb">
+      ${cab}
+      <div id="pesarCaja" style="display:none" class="caja">
+        <h3>Nueva pesada de ${esc(f.rp)}</h3>
+        <div class="inl">
+          <input id="pfPeso" type="number" step="0.1" placeholder="kg" autofocus>
+          <input id="pfFecha" type="date" value="${hoy()}">
+          <input id="pfCtx" placeholder="contexto" value="CONTROL" style="width:130px">
+          <button class="btn" onclick="guardarPesada('${esc(f.rp)}')">Guardar</button>
+          <button class="btn g" onclick="document.getElementById('pesarCaja').style.display='none'">Cancelar</button>
+        </div>
+      </div>
+      <h3 class="s">Origen</h3>
+      <div class="fk" style="margin-bottom:22px">
+        <div><span>Nacimiento</span><b class="s">${O.nacimiento?fec(O.nacimiento):'—'}</b></div>
+        <div><span>Peso al nacer</span><b class="s">${O.peso_nacer??'—'}</b></div>
+        <div><span>Padre</span><b class="s">${f.padre_existe?link(O.padre):esc(O.padre||'—')}</b></div>
+        <div><span>Madre</span><b class="s">${f.madre_existe?link(O.madre):esc(O.madre||'—')}</b></div>
+        <div><span>HBA</span><b class="s">${esc(O.hba||'—')}</b></div>
+        <div><span>Chip</span><b class="s">${esc(O.caravana||'—')}</b></div>
+        ${f.caravana_control?`<div><span>Caravana control</span><b class="s">${esc(f.caravana_control)}${f.caravana_color?' <span class="mut">'+esc(f.caravana_color)+'</span>':''}</b></div>`:''}
+      </div>
+      ${f.rp_provisorio||!f.chip?`<div class="caja" style="margin:-10px 0 18px">
+        <h3>${f.rp_provisorio?'Asignar RP definitivo y chip':'Poner el chip'}</h3>
+        <p class="ayuda">${f.rp_provisorio?'Este ternero todavía tiene el RP provisorio '+esc(f.rp)+'. Todo lo que ya tiene sigue con él.':'Este animal no tiene chip cargado.'}</p>
+        <div class="inl">
+          ${f.rp_provisorio?'<input id="idRp" placeholder="RP definitivo" style="width:130px">':''}
+          <input id="idChip" placeholder="chip (15 dígitos)" style="width:190px">
+          <button class="btn" onclick="identificarDesdeFicha('${esc(f.rp)}')">Guardar</button>
+        </div></div>`:''}
+      ${f.vientre ? `
+      <h3 class="s">Historial de partos</h3>
+      <div class="tw">
+        <table style="min-width:760px"><thead><tr>
+          <th>Campaña</th><th>Servicio</th><th>Tacto</th><th>Parto</th><th>Bloque</th>
+          <th>Ternero</th><th class="num">P. nacer</th><th class="num">Destete</th><th>Sexo</th>
+        </tr></thead><tbody>
+        ${f.campanas.length? f.campanas.map(c=>`<tr>
+          <td class="mono" style="font-size:12px">${esc(c.campana)}</td>
+          <td class="mut" style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis">${esc(c.servicio||'—')}</td>
+          <td>${esc(c.tacto_real||String(c.tacto_manga||'').replace(/PREÑADA_?/,'')||'—')}
+            ${c.tacto_corregido?'<span class="corr">corregido</span>':''}</td>
+          <td class="mono" style="font-size:12px">${c.parto?fec(c.parto):'—'}</td>
+          <td>${tag(c.bloque)}</td><td>${c.ternero?link(c.ternero):'—'}</td>
+          <td class="num">${c.peso_nac??'—'}</td><td class="num">${c.destete??'—'}</td>
+          <td>${c.sexo||'—'}</td></tr>`).join('')
+        : '<tr><td colspan="9" class="vacio">Sin partos registrados</td></tr>'}
+        </tbody></table></div>
+      ${f.corregidos?`<div style="font-size:12px;color:var(--gris);margin-top:9px">${f.corregidos} tacto${f.corregidos>1?'s':''} corregido${f.corregidos>1?'s':''} por la fecha de nacimiento.</div>`:''}`
+      : hijos.length ? `
+      <h3 class="s">Hijos <span class="mut" style="font-weight:300;letter-spacing:0;text-transform:none">${hijos.length}</span></h3>
+      <div class="tw"><table><thead><tr><th>RP</th><th>Nacimiento</th><th>Sexo</th><th>Pelaje</th><th>${String(f.sexo||'').startsWith('M')?'Madre':'Padre'}</th><th class="num">P. nacer</th><th class="num">Destete</th><th>Estado</th></tr></thead>
+        <tbody>${hijos.map(h=>`<tr><td class="rp">${link(h.rp)}</td><td class="mut">${fec(h.fecha_nac)||'—'}</td><td>${sexo(h.sexo)}</td><td>${punto(h.pelo)}</td><td>${esc(String(f.sexo||'').startsWith('M')?(h.madre_rp||'—'):(h.padre_rp||'—'))}</td><td class="num">${h.peso_nac??'—'}</td><td class="num">${h.destete??'—'}</td><td>${tag(h.estado||'ACTIVO')}</td></tr>`).join('')}</tbody></table></div>` : ''}
+
+      <h3 class="s">Pesadas <span class="mut" style="font-weight:300;letter-spacing:0;text-transform:none">${(f.pesadas||[]).length}</span></h3>
+      <div class="tw"><table><thead><tr><th>Fecha</th><th class="num">Peso</th><th>Contexto</th><th class="num">Días</th><th class="num">GDP</th></tr></thead>
+        <tbody>${(f.pesadas||[]).length? [...f.pesadas].reverse().map(p=>`<tr><td class="mono" style="font-size:12px">${fec(p.fecha)}</td><td class="num"><b>${p.peso}</b></td><td class="mut">${esc(p.contexto||'')}</td><td class="num">${p.dias??'—'}</td><td class="num ${p.gdp>=0.8?'bi':p.gdp!=null&&p.gdp<0?'al':''}">${p.gdp??'—'}</td></tr>`).join('')
+        : '<tr><td colspan="5" class="vacio">Nunca se pesó</td></tr>'}</tbody></table></div>
+
+      ${(f.sanidad||[]).length||(f.mediciones||[]).length ? `
+      <h3 class="s">Sanidad y mediciones</h3>
+      <div class="tw"><table><thead><tr><th>Fecha</th><th>Qué</th><th>Detalle</th></tr></thead><tbody>
+        ${[...(f.sanidad||[]).map(s=>({fecha:s.fecha,que:s.producto,det:[s.dosis,s.motivo].filter(Boolean).join(' · ')})),
+           ...(f.mediciones||[]).map(m=>({fecha:m.fecha,que:m.tipo,det:String(m.valor)}))].sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)))
+           .map(x=>`<tr><td class="mono" style="font-size:12px">${fec(x.fecha)}</td><td>${esc(x.que)}</td><td class="mut">${esc(x.det)}</td></tr>`).join('')}
+      </tbody></table></div>` : ''}
+
+      ${(f.destinos||[]).length ? `<h3 class="s">Destino</h3><div class="aviso" style="margin:0">${f.destinos.map(d=>`<b>${esc(d.destino)}</b> ${d.motivo?'· '+esc(d.motivo):''} · ${d.temporada} ${d.concretado?'· salió '+fec(d.fecha_salida):'· pendiente'}`).join('<br>')}</div>` : ''}
+
+      <h3 class="s">Notas de campo</h3>
+      <div style="background:#fff;border:1px solid var(--linea)">
+        ${f.notas&&f.notas.length? f.notas.map(n=>`<div style="padding:9px 14px;border-bottom:1px solid var(--linea);font-size:13px">
+          <span class="mono mut" style="font-size:11.5px">${fec(n.fecha)}</span>
+          <span class="${n.grave?'al':''}" style="margin-left:12px">${n.grave?'🔴 ':''}${esc(n.texto)}</span></div>`).join('')
+        : '<div style="padding:14px;color:var(--gris);font-size:13px">Sin notas</div>'}
+      </div>
+      <div class="notaCaja">
+        <input id="fNota" placeholder="Anotar algo de este animal…" onkeydown="if(event.key==='Enter')guardarNota('${esc(f.rp)}')">
+        <button class="btn" onclick="guardarNota('${esc(f.rp)}')">Anotar</button>
+      </div>
+    </div>`;
+}
+async function identificarDesdeFicha(rp){
+  const rpN=(document.getElementById('idRp')||{}).value, chip=(document.getElementById('idChip')||{}).value;
+  if(!rpN && !chip) return toast('Poné el RP definitivo o el chip');
+  try{
+    const r=await fetch(urlCampo('/api/relevar/identificar'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filas:[{rp_actual:rp, rp:rpN||undefined, chip:chip||undefined}]})}).then(x=>x.json());
+    if(r.error) throw new Error(r.error);
+    const f=r.filas[0]; if(!f.ok) throw new Error(f.error);
+    toast(`Listo${f.avisos.length?' · '+f.avisos.join('; '):''}`,4000);
+    abrirFicha(f.rp_nuevo||rp); cargar();
+  }catch(e){ toast(e.message,4000); }
+}
+function pesarDesdeFicha(){ const c=document.getElementById('pesarCaja'); c.style.display=''; document.getElementById('pfPeso').focus(); }
+async function guardarPesada(rp){
+  const peso=document.getElementById('pfPeso').value, fecha=document.getElementById('pfFecha').value, contexto=document.getElementById('pfCtx').value;
+  if(!peso) return toast('Falta el peso');
+  try{
+    const r=await fetch(urlCampo('/api/relevar/pesadas'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filas:[{rp,peso}],fecha,contexto})}).then(x=>x.json());
+    if(r.error) throw new Error(r.error);
+    const f=r.filas[0];
+    if(!f.ok) throw new Error(f.error);
+    toast(`${rp}: ${peso} kg guardado${f.avisos.length?' · '+f.avisos.join('; '):''}`, 4000);
+    abrirFicha(rp); cargar();
+  }catch(e){ toast(e.message,4000); }
+}
+async function guardarNota(rp){
+  const el=document.getElementById('fNota'), texto=el.value.trim(); if(!texto) return;
+  try{
+    const r=await fetch(urlCampo('/api/notas'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rp,texto})}).then(x=>x.json());
+    if(r.error) throw new Error(r.error);
+    if(r.aviso) toast(r.aviso,5000);
+    abrirFicha(rp); cargar();
+  }catch(e){ toast(e.message,4000); }
+}
+function preguntarPor(rp){ cerrarFicha(); document.getElementById('txt').value=`Contame de ${rp}: `; document.getElementById('txt').focus(); }
+
+// ── Relevar ──────────────────────────────────────────────────────────────────
+let relTab='pesadas';
+const REL = {
+  pesadas: { t:'Pesadas', ayuda:'Una línea por animal: <b>RP peso</b>. Como se anota en la libreta: "148 312", "N022 298,5". Sirve pegar desde una planilla o una balanza (dos columnas). Primero Revisar: dice qué RP no reconoce y qué peso no cierra con la historia.',
+    campos:[['fecha','Fecha','date'],['contexto','Contexto','text','CONTROL']], ejemplo:'148 312\nN022 298,5\n11 430' },
+  sanidad: { t:'Sanidad', ayuda:'Un producto a muchos animales. Elegí a quiénes: pegá los RP (uno por línea), un lote entero, o todos los activos.',
+    campos:[['fecha','Fecha','date'],['producto','Producto','text'],['dosis','Dosis','text'],['motivo','Motivo','text']], ejemplo:'148\nN022\n11' },
+  nacimientos: { t:'Nacimientos', ayuda:'Una línea por ternero: <b>caravana-control madre fecha sexo peso [pelaje] [padre]</b>. Ej: "150 D035 12/08/2026 H 31,5 colorado Hércules". El ternero queda con la control y un RP provisorio (C150) hasta que lo identifiques. Si ya tiene RP definitivo, elegí "RP definitivo" en el selector. Avisa si la madre ya tiene cría este año o no la encuentra.',
+    campos:[['identificacion','Primer dato de cada línea','select',['control','rp']],['color','Color de la caravana control','text','']], ejemplo:'150 D035 12/08/2026 H 31,5 colorado\n151 49 15/08/2026 M 34' },
+  identificar: { t:'Asignar RP / chip', ayuda:'El paso después del nacimiento: <b>control RP-definitivo [chip]</b>, una línea por ternero. Ej: "150 2077 320100362601234". Si sólo le ponés el chip: "150 320100362601234". Si el animal ya tiene RP y le cambiás el número, elegí "RP actual" en el selector. Lo que tenía (madre, pesadas, notas) sigue con él.',
+    campos:[['por','Primer dato de cada línea','select',['control','rp']],['color','Color (si hay dos controles iguales)','text','']], ejemplo:'150 2077 320100362601234\n151 2078' },
+  mediciones: { t:'Mediciones', ayuda:'Condición corporal, circunferencia escrotal, altura, frame: <b>RP valor</b>, una por línea.',
+    campos:[['fecha','Fecha','date'],['tipo','Medición','select',['CC','CE','ALTURA','FRAME','DOCILIDAD']]], ejemplo:'148 3.5\nN022 4' },
+  notas: { t:'Notas', ayuda:'<b>RP texto</b>, una por línea. Las palabras clave se entienden solas: "renga", "mala madre", "abortó", "mansa".',
+    campos:[['fecha','Fecha','date']], ejemplo:'13 renga de la pata izquierda\n27 muy mansa, buena madre' },
+  csv: { t:'Importar planilla', ayuda:'Un CSV de otro sistema, de una balanza o la planilla de relevamiento que emite RODEO ya llenada. Se detectan solas las columnas (RP, peso, fecha, madre, sexo…). Si el archivo no trae fecha, se usa la de acá.',
+    campos:[['tipo','Qué es','select',['','pesadas','nacimientos','sanidad','mediciones','notas']],['fecha','Fecha por defecto','date'],['contexto','Contexto (pesadas)','text','CONTROL']], ejemplo:'' },
+  planilla: { t:'Planilla para el campo', ayuda:'Emitir la lista de animales con columnas vacías para anotar peso, condición y observaciones. En Excel para la tablet o imprimible para la libreta. Lo que se llena vuelve por "Importar planilla".', campos:[], ejemplo:'' }
+};
+function pintarRelevar(){
+  const el=document.getElementById('relevarVista');
+  const r=REL[relTab];
+  const lotes = D ? D.terminacion : null;
+  el.innerHTML=`
+    <div class="sub-tabs">${Object.entries(REL).map(([k,v])=>`<button class="${k===relTab?'on':''}" onclick="relTab='${k}';pintarRelevar()">${v.t}</button>`).join('')}</div>
+    <div class="caja">
+      <h3>${r.t}</h3><p class="ayuda">${r.ayuda}</p>
+      ${relTab==='planilla' ? `
+        <div class="fila">
+          <div class="campo w"><label>Animales</label><select id="plOrigen">
+            <option value="">Todos los activos</option>
+            <option value="conjunto:plantel">Plantel (vientres)</option>
+            <option value="conjunto:recria">Recría</option>
+            <option value="conjunto:terminacion">Terminación</option>
+            <option value="conjunto:nacimientos">Nacimientos de este año</option>
+            <option value="conjunto:fallos">No destetaron</option>
+            <option value="rps">Los RP que pegue abajo</option>
+            <option value="lotes">Un lote…</option>
+          </select></div>
+          <div class="campo" id="plLoteCampo" style="display:none"><label>Lote</label><select id="plLote"></select></div>
+          <div class="campo w"><label>Columnas para anotar (separadas por coma)</label><input id="plCols" value="Peso, CC, Observaciones"></div>
+          <div class="campo w"><label>Título</label><input id="plTit" value="Planilla de relevamiento"></div>
+        </div>
+        <textarea id="relTexto" class="lineas" style="min-height:90px;display:none" placeholder="RP, uno por línea"></textarea>
+        <div class="acciones">
+          <button class="btn" onclick="emitirPlanilla('xlsx')">⇩ Excel</button>
+          <button class="btn g" onclick="emitirPlanilla('html')">Imprimir</button>
+        </div>`
+      : `
+        <div class="fila">
+          ${r.campos.map(([k,t,tipo,def])=>`<div class="campo${tipo==='text'&&k!=='contexto'?' w':''}"><label>${t}</label>${
+            tipo==='select' ? `<select id="rel_${k}">${def.map(o=>`<option value="${o}">${o||'Detectar solo'}</option>`).join('')}</select>`
+            : `<input id="rel_${k}" type="${tipo}" value="${tipo==='date'?hoy():(def||'')}">`}</div>`).join('')}
+          ${relTab==='sanidad' ? `<div class="campo"><label>A quiénes</label><select id="rel_quien" onchange="document.getElementById('relTexto').style.display=this.value==='rps'?'':'none';document.getElementById('relLoteCampo').style.display=this.value==='lote'?'':'none'">
+              <option value="rps">Los RP de abajo</option><option value="lote">Un lote</option><option value="todos">Todos los activos</option></select></div>
+            <div class="campo" id="relLoteCampo" style="display:none"><label>Lote</label><select id="rel_lote"></select></div>` : ''}
+        </div>
+        ${relTab==='csv' ? `<div class="dz" id="dz" onclick="document.getElementById('csvFile').click()" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="soltarCsv(event)">
+            Arrastrá el archivo acá o hacé clic para elegirlo (.csv, .txt)<br><span id="csvNombre" style="font-size:12px"></span></div>
+          <input type="file" id="csvFile" accept=".csv,.txt,.tsv" style="display:none" onchange="leerCsv(this.files[0])">
+          <textarea id="relTexto" class="lineas" style="margin-top:10px;min-height:120px" placeholder="…o pegá el contenido del CSV acá (con la fila de encabezados)"></textarea>`
+        : `<textarea id="relTexto" class="lineas" placeholder="${esc(r.ejemplo)}"></textarea>`}
+        <div class="acciones">
+          <button class="btn g" onclick="relevar(true)">Revisar</button>
+          <button class="btn" id="relConfirmar" onclick="relevar(false)" disabled>Confirmar y cargar</button>
+          <span class="mut" style="font-size:12px" id="relEstado"></span>
+        </div>`}
+      <div class="res" id="relRes"></div>
+    </div>`;
+  cargarLotesEn(['rel_lote','plLote']);
+  const plo=document.getElementById('plOrigen');
+  if(plo) plo.onchange=()=>{ document.getElementById('relTexto').style.display=plo.value==='rps'?'':'none'; document.getElementById('plLoteCampo').style.display=plo.value==='lotes'?'':'none'; };
+}
+async function cargarLotesEn(ids){
+  const sels=ids.map(i=>document.getElementById(i)).filter(Boolean); if(!sels.length) return;
+  try{ const lotes=await fetch(urlCampo('/api/lotes')).then(r=>r.json());
+    sels.forEach(s=>s.innerHTML=lotes.map(l=>`<option value="${l.id}">${esc(l.nombre)}${l.potrero?' · '+esc(l.potrero):''} (${l.animales})</option>`).join('')||'<option value="">Sin lotes</option>'); }catch(e){}
+}
+function valorRel(k){ const e=document.getElementById('rel_'+k); return e?e.value:undefined; }
+let relPrevio=null;
+async function relevar(simular){
+  const texto=(document.getElementById('relTexto')||{}).value||'';
+  const est=document.getElementById('relEstado'); est.textContent=simular?'Revisando…':'Cargando…';
+  let url, body;
+  try{
+    if(relTab==='pesadas'){ url='/api/relevar/pesadas'; body={ texto, fecha:valorRel('fecha'), contexto:valorRel('contexto'), simular }; }
+    else if(relTab==='mediciones'){ url='/api/relevar/mediciones'; body={ texto, fecha:valorRel('fecha'), tipo:valorRel('tipo'), simular }; }
+    else if(relTab==='notas'){ url='/api/relevar/notas'; body={ texto, fecha:valorRel('fecha'), simular }; }
+    else if(relTab==='sanidad'){ url='/api/relevar/sanidad'; const q=valorRel('quien');
+      body={ fecha:valorRel('fecha'), producto:valorRel('producto'), dosis:valorRel('dosis'), motivo:valorRel('motivo'), simular,
+        ...(q==='todos'?{todos:true}:q==='lote'?{lote_id:Number(valorRel('lote'))}:{texto}) }; }
+    else if(relTab==='nacimientos'){ url='/api/relevar/nacimientos';
+      const porControl = (valorRel('identificacion')||'control')==='control';
+      const filas=texto.split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map(l=>{ const p=l.split(/[\s,;\t]+/); return { ...(porControl?{caravana_control:p[0]}:{rp:p[0]}), madre_rp:p[1], fecha_nac:p[2], sexo:p[3], peso_nac:p[4], pelo:p[5], padre_rp:p.slice(6).join(' ')||undefined }; });
+      body={ filas, simular, color: valorRel('color')||undefined }; }
+    else if(relTab==='identificar'){ url='/api/relevar/identificar'; body={ texto, por: valorRel('por')||'control', color: valorRel('color')||undefined, simular }; }
+    else if(relTab==='csv'){ url='/api/importar/csv'; body={ texto, tipo:valorRel('tipo')||undefined, fecha:valorRel('fecha'), contexto:valorRel('contexto'), simular }; }
+    if(!texto.trim() && !(relTab==='sanidad' && valorRel('quien')!=='rps')) throw new Error('No hay nada para cargar');
+    const r=await fetch(urlCampo(url),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(x=>x.json());
+    if(r.error) throw new Error(r.error);
+    relPrevio=r;
+    est.textContent=r.mensaje;
+    document.getElementById('relConfirmar').disabled = !(simular && r.bien>0);
+    const filas=r.filas||[];
+    document.getElementById('relRes').innerHTML = `
+      <div class="aviso ${r.mal&&!r.bien?'mal':r.mal?'':'ok'}" style="margin:0 0 10px"><b>${esc(r.mensaje)}</b>${r.tipo?` · detectado: ${r.tipo}${r.mapa?' · columnas: '+esc(Object.entries(r.mapa).map(([a,b])=>a+'='+b).join(', ')):''}`:''}</div>
+      ${filas.length?`<div class="tw"><table><thead><tr><th>#</th><th>RP</th><th>Dato</th><th>Anterior</th><th>Resultado</th></tr></thead><tbody>
+      ${filas.map(f=>`<tr><td class="mut">${f.fila||''}</td><td class="rp">${esc(f.rp||'')}</td>
+        <td>${f.peso!=null?f.peso+' kg':f.valor!=null?f.tipo+' '+f.valor:f.fecha_nac?`${f.sexo} · ${fec(f.fecha_nac)} · ${f.peso_nac??'—'} kg · madre ${esc(f.madre||'—')}${f.control?' · control '+esc(f.control)+(f.color?' '+esc(f.color):'')+(f.provisorio?' → RP provisorio '+esc(f.rp):''):''}`:f.rp_nuevo||f.chip?`${f.rp_actual?esc(f.rp_actual)+' → ':''}${f.rp_nuevo?'RP '+esc(f.rp_nuevo):''}${f.chip?' · chip '+esc(f.chip):''}`:f.texto?esc(f.texto):''}${f.fecha&&f.peso!=null?` <span class="mut">${fec(f.fecha)}</span>`:''}</td>
+        <td class="mut">${f.anterior!=null?`${f.anterior} kg (${fec(f.fecha_anterior)})${f.diferencia!=null?` <span class="${f.diferencia>=0?'bi':'al'}">${f.diferencia>0?'+':''}${f.diferencia}</span>`:''}${f.gdp!=null?` · ${f.gdp} kg/d`:''}`:''}</td>
+        <td>${f.ok?(f.hecho?'<span class="tag t-ok">cargado</span>':'<span class="tag t-preñada">listo</span>'):`<span class="tag t-error">no</span> <span class="al">${esc(f.error||'')}</span>`}${f.avisos&&f.avisos.length?` <span class="mut">⚠ ${esc(f.avisos.join('; '))}</span>`:''}</td></tr>`).join('')}
+      </tbody></table></div>`:''}`;
+    if(!simular && r.bien){ toast(r.mensaje,4000); cargar(); }
+  }catch(e){ est.textContent=''; document.getElementById('relRes').innerHTML=`<div class="aviso mal" style="margin:0">${esc(e.message)}</div>`; document.getElementById('relConfirmar').disabled=true; }
+}
+function leerCsv(file){ if(!file) return; const r=new FileReader(); r.onload=()=>{ document.getElementById('relTexto').value=r.result; document.getElementById('csvNombre').textContent=file.name; relevar(true); }; r.readAsText(file,'utf-8'); }
+function soltarCsv(e){ e.preventDefault(); document.getElementById('dz').classList.remove('over'); leerCsv(e.dataTransfer.files[0]); }
+function emitirPlanilla(formato){
+  const o=document.getElementById('plOrigen').value;
+  const body={ formato, titulo:document.getElementById('plTit').value, columnas:document.getElementById('plCols').value.split(',').map(s=>s.trim()).filter(Boolean), campo };
+  if(o.startsWith('conjunto:')) body.conjunto=o.slice(9);
+  else if(o==='rps') body.rps=document.getElementById('relTexto').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  else if(o==='lotes') body.lote_id=Number(document.getElementById('plLote').value);
+  if(formato==='html'){
+    const f=document.createElement('form'); f.method='POST'; f.action=urlCampo('/api/planilla'); f.target='_blank';
+    for(const [k,v] of Object.entries(body)){ if(v===undefined) continue; const i=document.createElement('input'); i.type='hidden'; i.name=k; i.value=typeof v==='object'?JSON.stringify(v):v; f.appendChild(i); }
+    document.body.appendChild(f); f.submit(); f.remove(); return;
+  }
+  bajar(urlCampo('/api/planilla'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+}
+
+// ── Empresa: todos los campos ────────────────────────────────────────────────
+async function pintarEmpresa(){
+  const el=document.getElementById('empresaVista'); el.innerHTML='<div class="vacio">Cargando…</div>';
+  try{
+    const [r, st] = await Promise.all([
+      fetch(`${API}/api/empresa/resumen?empresa=${encodeURIComponent(empresaActual||'')}`).then(x=>x.json()),
+      fetch(`${API}/api/rodeo-resumen?empresa=${encodeURIComponent(empresaActual||'')}`).then(x=>x.json()).catch(()=>null)
+    ]);
+    if(r.error) throw new Error(r.error);
+    const T=r.totales; const n=v=>v==null?'—':v;
+    el.innerHTML=`
+      <div class="kpis" style="border:1px solid var(--linea);margin-bottom:14px">
+        <div class="kpi"><b>${T.campos}</b><span>Campos</span></div><div class="kpi"><b>${T.cabezas}</b><span>Cabezas</span></div>
+        <div class="kpi"><b>${T.vientres}</b><span>Vientres</span></div><div class="kpi bien"><b>${T.prenadas}</b><span>Preñadas</span></div>
+        <div class="kpi"><b>${T.criando}</b><span>Criando</span></div><div class="kpi ${T.fallaron?'al':''}"><b>${T.fallaron}</b><span>No destetaron</span></div>
+        <div class="kpi"><b>${T.toros}</b><span>Toros</span></div><div class="kpi"><b>${T.terminando}</b><span>Terminando</span></div>
+        <div class="kpi ${T.marcados_salida?'oro':''}"><b>${T.marcados_salida}</b><span>Con destino de salida</span></div>
+      </div>
+      <div class="caja"><h3>${esc(r.nombre)}${r.razon_social&&r.razon_social!==r.nombre?" · "+esc(r.razon_social):""}${r.finanzas.nombre?" · financiero "+esc(r.finanzas.nombre):""} · campo por campo</h3>
+        <div class="tw"><table><thead><tr><th>Campo</th><th class="num">Cabezas</th><th class="num">Vientres</th><th class="num">Preñadas</th><th class="num">Criando</th><th class="num">Destetaron</th><th class="num">No destetaron</th><th class="num">Destete efectivo</th><th class="num">Eficiencia</th><th class="num">Toros</th><th class="num">Terminando</th><th class="num">Kg corral</th><th class="num">Salen</th><th></th></tr></thead>
+        <tbody>${r.campos.map(c=>c.ok?`<tr><td class="rp">${esc(c.nombre)}</td><td class="num">${c.cabezas}</td><td class="num">${c.vientres}</td><td class="num bi">${c.prenadas}</td><td class="num">${c.criando}</td><td class="num">${c.destetaron}</td><td class="num ${c.fallaron?'al':''}">${c.fallaron}</td><td class="num">${c.destete_efectivo!=null?c.destete_efectivo+'%':'—'}</td><td class="num">${c.eficiencia!=null?c.eficiencia+'%':'—'}</td><td class="num">${c.toros}</td><td class="num">${c.terminando}</td><td class="num">${n(c.kg_corral)}</td><td class="num">${c.marcados_salida}</td><td>${c.key===campo?'<span class="tag t-cabeza">este</span>':`<a href="#" onclick="campo='${esc(c.key)}';localStorage.setItem('campo',campo);const u=new URL(location.href);u.searchParams.set('campo',campo);location.href=u.toString();return false" style="color:var(--azul)">ir →</a>`}</td></tr>`:`<tr><td class="rp">${esc(c.nombre)}</td><td colspan="13" class="al">${esc(c.error)}</td></tr>`).join('')}</tbody></table></div>
+        <p class="ayuda" style="margin-top:10px">Financiero: ${r.finanzas.configurado?'<b>'+esc(r.finanzas.url)+'</b>'+(r.finanzas.campo?' · '+esc(r.finanzas.campo):''):'no configurado (EMPRESAS o FINANZAS_URL)'}. <a href="${API}/api/rodeo-resumen?empresa=${encodeURIComponent(r.empresa)}" target="_blank">Stock consolidado para el financiero</a>.</p>
+      </div>
+      ${st&&st.categorias?`<div class="caja"><h3>Stock consolidado por categoría</h3>
+        <div class="tw"><table><thead><tr><th>Categoría</th><th>Registro</th><th class="num">Plantel</th><th class="num">A la venta</th><th class="num">Total</th><th class="num">Kg prom</th><th class="num">Kg totales</th><th class="num">Sin peso</th></tr></thead>
+        <tbody>${st.categorias.map(c=>`<tr><td class="rp">${esc(c.categoria)}</td><td class="mut">${esc(c.registro)}</td><td class="num">${c.plantel}</td><td class="num">${c.venta}</td><td class="num"><b>${c.cantidad}</b></td><td class="num">${n(c.kg_estimado)}</td><td class="num">${c.kg_total?c.kg_total.toLocaleString('es-AR'):'—'}</td><td class="num ${c.sin_peso?'al':''}">${c.sin_peso}</td></tr>`).join('')}
+        <tr><td><b>Total</b></td><td></td><td class="num"><b>${st.totales.plantel}</b></td><td class="num"><b>${st.totales.venta}</b></td><td class="num"><b>${st.totales.cabezas}</b></td><td></td><td class="num"><b>${st.totales.kg_total.toLocaleString('es-AR')}</b></td><td></td></tr></tbody></table></div></div>`:''}
+      <div class="caja"><h3>Trasladar animales a otro campo</h3>
+        <p class="ayuda">Los RP, uno por línea, y a qué campo van. Viajan con todo su historial; en este campo quedan como trasladados. Primero Revisar.</p>
+        <div class="fila">
+          <div class="campo"><label>Desde</label><select id="trDesde">${camposTodos.filter(c=>c.empresa===empresaActual).map(c=>`<option value="${esc(c.key)}" ${c.key===campo?'selected':''}>${esc(c.nombre)}</option>`).join('')}</select></div>
+          <div class="campo"><label>Hasta</label><select id="trHasta">${camposTodos.filter(c=>c.empresa===empresaActual&&c.key!==campo).map(c=>`<option value="${esc(c.key)}">${esc(c.nombre)}</option>`).join('')}</select></div>
+          <div class="campo"><label>Fecha</label><input id="trFecha" type="date" value="${hoy()}"></div>
+          <div class="campo w"><label>Motivo</label><input id="trMotivo" placeholder="opcional"></div>
+        </div>
+        <textarea id="trTexto" class="lineas" style="min-height:90px" placeholder="RP, uno por línea"></textarea>
+        <div class="acciones"><button class="btn g" onclick="trasladar(true)">Revisar</button><button class="btn" id="trConfirmar" onclick="trasladar(false)" disabled>Confirmar traslado</button><span class="mut" id="trEstado" style="font-size:12px"></span></div>
+        <div class="res" id="trRes"></div>
+      </div>`;
+  }catch(e){ el.innerHTML=`<div class="aviso mal">${esc(e.message)}</div>`; }
+}
+async function trasladar(simular){
+  const body={ texto:document.getElementById('trTexto').value, desde:document.getElementById('trDesde').value, hasta:document.getElementById('trHasta').value, fecha:document.getElementById('trFecha').value, motivo:document.getElementById('trMotivo').value, simular };
+  const est=document.getElementById('trEstado'); est.textContent=simular?'Revisando…':'Trasladando…';
+  try{
+    const r=await fetch(`${API}/api/traslados`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(x=>x.json());
+    if(r.error) throw new Error(r.error);
+    est.textContent=r.mensaje; document.getElementById('trConfirmar').disabled=!(simular&&r.bien>0);
+    document.getElementById('trRes').innerHTML=`<div class="tw"><table><thead><tr><th>RP</th><th>Categoría</th><th>Resultado</th></tr></thead><tbody>${r.filas.map(f=>`<tr><td class="rp">${esc(f.rp)}</td><td class="mut">${esc(f.categoria||'')}</td><td>${f.ok?(f.hecho?'<span class="tag t-ok">trasladado</span>':'<span class="tag t-preñada">listo</span>'):'<span class="tag t-error">no</span> <span class="al">'+esc(f.error||'')+'</span>'}${f.avisos&&f.avisos.length?' <span class="mut">⚠ '+esc(f.avisos.join('; '))+'</span>':''}</td></tr>`).join('')}</tbody></table></div>`;
+    if(!simular&&r.bien){ toast(r.mensaje,5000); cargar(); }
+  }catch(e){ est.textContent=''; document.getElementById('trRes').innerHTML=`<div class="aviso mal">${esc(e.message)}</div>`; }
+}
+
+// ── Archivos ─────────────────────────────────────────────────────────────────
+async function pintarArchivos(){
+  const el=document.getElementById('archivosVista');
+  el.innerHTML='<div class="vacio">Cargando…</div>';
+  const [tableros, archivos, memoria] = await Promise.all([
+    fetch(urlCampo('/api/tableros')).then(r=>r.json()).catch(()=>[]),
+    fetch(urlCampo('/api/archivos')).then(r=>r.json()).catch(()=>[]),
+    fetch(urlCampo('/api/memoria')).then(r=>r.json()).catch(()=>[])
+  ]);
+  const fecha = s => s ? fec(String(s).slice(0,10))+' '+String(s).slice(11,16) : '';
+  el.innerHTML=`
+    <div class="caja">
+      <h3>Tablas del sistema</h3>
+      <p class="ayuda">Cada tabla del tablero se baja desde su pestaña con lo que se ve filtrado. Acá, las completas:</p>
+      <div>${['plantel','toros','nacimientos','recria','terminacion','destinos','fallos','animales','pesadas','servicios','sanidad','mediciones','notas','lotes'].map(c=>
+        `<span class="chip" onclick="bajarUrl('/api/exportar/${c}.xlsx')">⇩ ${c}</span>`).join('')}
+        <span class="chip" style="border-color:var(--azul);color:var(--azul)" onclick="bajarUrl('/api/exportar/rodeo.xlsx')">⇩ Rodeo completo (todas las hojas)</span></div>
+    </div>
+    <div class="caja" id="cajaFin">
+      <h3>Enlace con el financiero</h3>
+      <p class="ayuda" id="finTexto">Consultando…</p>
+      <div class="acciones">
+        <button class="btn g" onclick="finanzasEstado()">Probar conexión</button>
+        <button class="btn" onclick="finanzasSincronizar()">Mandar el stock al financiero</button>
+        <a class="chip" href="${urlCampo('/api/rodeo-resumen')}" target="_blank">Ver lo que le damos (/api/rodeo-resumen)</a>
+      </div>
+      <div id="finUltimos"></div>
+    </div>
+    <div class="caja">
+      <h3>Lo que el bot recuerda del campo <span class="mut" style="font-weight:300;letter-spacing:0;text-transform:none">${memoria.length}</span></h3>
+      <p class="ayuda">Cosas que le contaste y que usa en cada respuesta: cómo llaman a un potrero, un criterio, quién es quién. Se las podés decir por el chat o anotar acá.</p>
+      ${memoria.length?`<div class="lista">${memoria.map(mm=>`<div class="it"><span class="tag t-preñada">${esc(mm.categoria||'otro')}</span><span class="d" style="color:var(--tinta);font-size:13px">${esc(mm.texto)}</span><span class="mut" style="font-size:11px">${fecha(mm.created_at)}</span>
+        <a href="#" onclick="olvidar(${mm.id});return false" style="color:var(--rojo)">Olvidar</a></div>`).join('')}</div>`:'<div class="vacio" style="padding:14px">Todavía no le enseñaste nada</div>'}
+      <div class="notaCaja"><input id="memTexto" placeholder="Enseñarle algo: 'al potrero 7 le decimos La Loma'" onkeydown="if(event.key==='Enter')recordarDesdeTablero()"><button class="btn" onclick="recordarDesdeTablero()">Anotar</button></div>
+    </div>
+    <div class="caja">
+      <h3>Tableros armados por el bot <span class="mut" style="font-weight:300;letter-spacing:0;text-transform:none">${tableros.length}</span></h3>
+      <p class="ayuda">Pedile al chat "armame un tablero con…" y aparece acá. Sus tablas se pueden bajar como Excel.</p>
+      ${tableros.length?`<div class="lista">${tableros.map(t=>`<div class="it"><b>${esc(t.titulo)}</b><span class="d">${esc(t.pedido||'')} · ${fecha(t.updated_at)}</span>
+        <a href="${urlCampo(t.url)}" target="_blank">Ver</a><a href="${urlCampo(t.url+'.xlsx')}">Excel</a><a href="${urlCampo(t.url+'.csv')}">CSV</a>
+        <a href="#" onclick="borrarTablero('${esc(t.slug)}');return false" style="color:var(--rojo)">Borrar</a></div>`).join('')}</div>`:'<div class="vacio" style="padding:20px">Todavía no hay tableros</div>'}
+    </div>
+    <div class="caja">
+      <h3>Archivos generados <span class="mut" style="font-weight:300;letter-spacing:0;text-transform:none">${archivos.length}</span></h3>
+      <p class="ayuda">Lo que el bot arma cuando le pedís "dame un excel de…" queda guardado acá.</p>
+      ${archivos.length?`<div class="lista">${archivos.map(a=>`<div class="it"><b>${esc(a.nombre)}</b><span class="d">${esc(a.descripcion||'')} · ${a.kb} KB · ${fecha(a.created_at)}${a.creado_por?' · '+esc(a.creado_por):''}</span>
+        <a href="${urlCampo(a.url)}">Bajar</a>${/html/.test(a.mime)?`<a href="${urlCampo(a.url+'?ver=1')}" target="_blank">Ver</a>`:''}
+        <a href="#" onclick="borrarArchivo(${a.id});return false" style="color:var(--rojo)">Borrar</a></div>`).join('')}</div>`:'<div class="vacio" style="padding:20px">Todavía no hay archivos</div>'}
+    </div>`;
+}
+async function finanzasEstado(){
+  const t=document.getElementById('finTexto'); if(!t) return;
+  try{
+    const e=await fetch(urlCampo('/api/finanzas/estado')).then(r=>r.json());
+    if(!e.configurado){ t.innerHTML='No está configurado. En Railway, agregá <b>FINANZAS_URL</b> con la dirección de IMPROLUX (y en IMPROLUX, <b>ADE_URL</b> con la dirección de esta app). Igual, el financiero ya puede leer el stock en /api/rodeo-resumen.'; return; }
+    t.innerHTML = e.conecta ? `Conectado a <b>${esc(e.url)}</b>${e.campo?' · campo '+esc(e.campo):''}. Este mes según el financiero: ingresos ${Math.round(e.resumen.ingresos_mes||0).toLocaleString('es-AR')}, egresos ${Math.round(e.resumen.egresos_mes||0).toLocaleString('es-AR')}.` : `Configurado (${esc(e.url)}) pero no responde: ${esc(e.error||'')}`;
+    const u=e.ultimos||[]; document.getElementById('finUltimos').innerHTML = u.length ? `<div class="lista" style="margin-top:10px">${u.slice(0,8).map(x=>`<div class="it"><span class="tag ${x.ok?'t-ok':'t-error'}">${esc(x.direccion)}</span><b>${esc(x.que)}</b><span class="d">${esc(x.detalle||'')}</span><span class="mut" style="font-size:11px">${fec(String(x.created_at).slice(0,10))} ${String(x.created_at).slice(11,16)}</span></div>`).join('')}</div>` : '';
+  }catch(err){ t.textContent='No pude consultar el estado: '+err.message; }
+}
+async function finanzasSincronizar(){
+  try{ const r=await fetch(urlCampo('/api/finanzas/sincronizar'),{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(x=>x.json()); if(r.error) throw new Error(r.error); toast(r.mensaje||'Stock enviado',5000); finanzasEstado(); }
+  catch(e){ toast('No pude: '+e.message,5000); }
+}
+async function olvidar(id){ await fetch(urlCampo('/api/memoria/'+id),{method:'DELETE'}); pintarArchivos(); }
+async function recordarDesdeTablero(){
+  const el=document.getElementById('memTexto'), texto=el.value.trim(); if(!texto) return;
+  const r=await fetch(urlCampo('/api/memoria'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({texto,categoria:'campo'})}).then(x=>x.json());
+  if(r.error) return toast(r.error); toast('Anotado'); pintarArchivos();
+}
+const _pintarArchivosOrig = pintarArchivos;
+pintarArchivos = async function(){ await _pintarArchivosOrig(); finanzasEstado(); };
+async function borrarTablero(slug){ if(!confirm('¿Borrar el tablero '+slug+'?')) return; await fetch(urlCampo('/api/tableros/'+encodeURIComponent(slug)),{method:'DELETE'}); pintarArchivos(); }
+async function borrarArchivo(id){ if(!confirm('¿Borrar el archivo?')) return; await fetch(urlCampo('/api/archivos/'+id),{method:'DELETE'}); pintarArchivos(); }
+
+// ── Chat ─────────────────────────────────────────────────────────────────────
+function linkear(texto){
+  return esc(texto).replace(/(\/(archivos|t)\/[^\s)<>"]+)/g, (m)=>`<a href="${urlCampo(m)}" ${m.startsWith('/t/')?'target="_blank"':''}>${m}</a>`)
+    .replace(/\b(https?:\/\/[^\s<>"]+)/g, '<a href="$1" target="_blank">$1</a>');
+}
+function msg(quien,texto,pasos){
+  const d=document.createElement('div'); d.className='msg '+quien;
+  if(quien==='bot') d.innerHTML=linkear(texto); else d.textContent=texto;
+  if(pasos&&pasos.length){
+    const p=document.createElement('div'); p.className='pasos';
+    const partes=[]; const nc=pasos.filter(x=>x.tipo==='consulta').length; if(nc) partes.push(nc+' consulta(s)');
+    if(pasos.some(x=>x.tipo==='escritura')) partes.push('escribió'); if(pasos.some(x=>x.tipo==='archivo')) partes.push('armó un archivo'); if(pasos.some(x=>x.tipo==='tablero')) partes.push('armó un tablero');
+    p.textContent=partes.join(' · '); d.appendChild(p);
+  }
+  const m=document.getElementById('msgs'); m.appendChild(d); m.scrollTop=m.scrollHeight; return d;
+}
+function saludo(){
+  msg('bot','Preguntame lo que quieras del rodeo. Consulto la base antes de responder. También armo archivos, cargo lo que anotaste y recuerdo lo que me contás del campo.');
+  document.getElementById('sug').innerHTML=[
+    '¿cómo viene la parición?',
+    '¿cuál es la vaca más eficiente y por qué?',
+    'dame un excel de las vacas que no destetaron',
+    '¿hay algo mal cargado?'
+  ].map(s=>`<button onclick="usar(this)">${s}</button>`).join('') + '<div class="mut" style="font-size:11px;padding:4px 2px">📎 También le podés mandar una foto de la libreta, un Excel, un CSV o un PDF: arrastralo acá o pegalo.</div>';
+}
+async function cargarConversacion(){
+  try{
+    const c = await fetch(urlCampo(`/api/conversacion?sesion=${encodeURIComponent(sesion)}`)).then(r=>r.json());
+    if(!c.length) return saludo();
+    c.forEach(m=>{ msg(m.role==='user'?'yo':'bot', m.texto); });
+    document.getElementById('sug').innerHTML='';
+  }catch(e){ saludo(); }
+}
+async function nuevaConversacion(){
+  await fetch(urlCampo(`/api/conversacion?sesion=${encodeURIComponent(sesion)}`),{method:'DELETE'}).catch(()=>{});
+  document.getElementById('msgs').innerHTML=''; historia=[]; saludo();
+}
+function usar(b){ document.getElementById('txt').value=b.textContent; enviar(); }
+
+// ── Adjuntos: fotos, PDF, Excel, CSV, Word ─────────────────────────────────
+let adjuntos = [];   // [{nombre, mime, base64, vista}]
+const chatEl = document.querySelector('.chat');
+chatEl.addEventListener('dragover', e=>{ e.preventDefault(); chatEl.classList.add('arrastre'); });
+chatEl.addEventListener('dragleave', ()=>chatEl.classList.remove('arrastre'));
+chatEl.addEventListener('drop', e=>{ e.preventDefault(); chatEl.classList.remove('arrastre'); agregarAdjuntos(e.dataTransfer.files); });
+function pegar(e){ const items=[...(e.clipboardData||{}).items||[]].filter(i=>i.kind==='file'); if(items.length){ e.preventDefault(); agregarAdjuntos(items.map(i=>i.getAsFile())); } }
+async function agregarAdjuntos(files){
+  for(const f of [...files]){
+    if(!f) continue;
+    if(f.size > 40*1024*1024){ toast(`${f.name} pesa más de 40 MB`,4000); continue; }
+    try{
+      const a = /^image\//.test(f.type) ? await achicarImagen(f) : { nombre:f.name, mime:f.type||'application/octet-stream', base64: await base64De(f) };
+      adjuntos.push(a);
+    }catch(e){ toast('No pude leer '+f.name+': '+e.message,4000); }
+  }
+  pintarAdjuntos();
+}
+const base64De = f => new Promise((ok,no)=>{ const r=new FileReader(); r.onload=()=>ok(String(r.result).split(',')[1]); r.onerror=no; r.readAsDataURL(f); });
+// Las fotos del teléfono pesan 5-12 MB: se achican a 1800 px como JPG antes de mandarlas.
+function achicarImagen(f){
+  return new Promise((ok,no)=>{
+    const img=new Image(); const url=URL.createObjectURL(f);
+    img.onload=()=>{
+      const max=1800, esc=Math.min(1, max/Math.max(img.width,img.height));
+      const c=document.createElement('canvas'); c.width=Math.round(img.width*esc); c.height=Math.round(img.height*esc);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      const data=c.toDataURL('image/jpeg',0.85); URL.revokeObjectURL(url);
+      ok({ nombre: f.name.replace(/\.[^.]+$/,'')+'.jpg', mime:'image/jpeg', base64: data.split(',')[1], vista: data });
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); no(new Error('no es una imagen que pueda abrir')); };
+    img.src=url;
+  });
+}
+function pintarAdjuntos(){
+  document.getElementById('adj').innerHTML = adjuntos.map((a,i)=>`<div class="a" title="${esc(a.nombre)}">${a.vista?'🖼':/pdf/.test(a.mime)?'📄':/sheet|excel|csv/.test(a.mime+a.nombre)?'📊':'📎'} <span>${esc(a.nombre)}</span> <b onclick="adjuntos.splice(${i},1);pintarAdjuntos()">✕</b></div>`).join('');
+}
+
+// Manda la pregunta (y los adjuntos) y va mostrando lo que el bot hace mientras piensa.
+async function enviar(){
+  const el=document.getElementById('txt'), t=el.value.trim(); if(!t && !adjuntos.length) return;
+  const misAdjuntos = adjuntos; adjuntos=[]; pintarAdjuntos();
+  el.value='';
+  const mio = msg('yo', t || (misAdjuntos.length?'':''));
+  if(misAdjuntos.length){
+    const d=document.createElement('div'); d.className='adjs';
+    misAdjuntos.forEach(a=>{ if(a.vista){ const im=document.createElement('img'); im.src=a.vista; d.appendChild(im); } const s=document.createElement('div'); s.textContent='📎 '+a.nombre; d.appendChild(s); });
+    mio.insertBefore(d, mio.firstChild);
+  }
+  document.getElementById('sug').innerHTML='';
+  const p=msg('bot',''); p.classList.add('pen');
+  const vivo=document.createElement('div'); vivo.className='vivo'; p.appendChild(vivo);
+  const pen=document.createElement('div'); pen.className='pen'; pen.textContent='pensando…'; vivo.appendChild(pen);
+  const txt=document.createElement('div'); txt.className='txt'; p.appendChild(txt);
+  const m=document.getElementById('msgs');
+  let texto='', pensando='', fin=null;
+  const paso=(texto,err)=>{ const d=document.createElement('div'); d.className='p'+(err?' err':''); d.textContent=texto; vivo.insertBefore(d,pen); m.scrollTop=m.scrollHeight; };
+  const procesar=ev=>{
+    if(ev.tipo==='vuelta'){ if(texto.trim()){ paso(texto.trim()); } texto=''; txt.textContent=''; pensando=''; pen.textContent='pensando…'; pen.style.display=''; }
+    else if(ev.tipo==='pensando'){ pensando+=ev.delta; pen.textContent=pensando.slice(-160); }
+    else if(ev.tipo==='texto'){ texto+=ev.delta; txt.textContent=texto; pen.style.display='none'; m.scrollTop=m.scrollHeight; }
+    else if(ev.tipo==='paso'){ paso(ev.texto, ev.error); pen.textContent='pensando…'; }
+    else if(ev.tipo==='adjuntos'){ ev.adjuntos.forEach(a=>paso(a.error?`${a.nombre}: ${a.error}`:`leí ${a.nombre}${a.hojas?' ('+a.hojas.map(h=>h.nombre+': '+h.filas+' filas').join(', ')+')':''}`, !!a.error)); }
+    else if(ev.tipo==='fin'||ev.tipo==='error'){ fin=ev; }
+  };
+  try{
+    const r=await fetch(urlCampo('/api/chat/stream'),{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({mensaje:t, sesion, adjuntos: misAdjuntos.map(a=>({nombre:a.nombre, mime:a.mime, base64:a.base64}))})});
+    if(!r.ok || !r.body){ throw new Error('El servidor respondió '+r.status); }
+    const lector=r.body.getReader(); const dec=new TextDecoder(); let buf='';
+    while(true){
+      const {value,done}=await lector.read(); if(done) break;
+      buf+=dec.decode(value,{stream:true});
+      let i; while((i=buf.indexOf('\n\n'))>=0){
+        const bloque=buf.slice(0,i); buf=buf.slice(i+2);
+        for(const linea of bloque.split('\n')){ if(linea.startsWith('data: ')){ try{ procesar(JSON.parse(linea.slice(6))); }catch(e){} } }
+      }
+    }
+    if(!fin) throw new Error('Se cortó la conexión');
+    p.classList.remove('pen'); pen.remove();
+    const resp = fin.respuesta||fin.error||'No entendí.';
+    txt.innerHTML=linkear(resp);
+    if(fin.pasos&&fin.pasos.length){
+      const ps=document.createElement('div'); ps.className='pasos';
+      const partes=[]; const nc=fin.pasos.filter(x=>x.tipo==='consulta').length; if(nc) partes.push(nc+' consulta(s)');
+      if(fin.pasos.some(x=>x.tipo==='escritura')) partes.push('escribió'); if(fin.pasos.some(x=>x.tipo==='archivo')) partes.push('armó un archivo');
+      if(fin.pasos.some(x=>x.tipo==='tablero')) partes.push('armó un tablero'); if(fin.pasos.some(x=>x.tipo==='memoria')) partes.push('anotó en la memoria');
+      ps.textContent=partes.join(' · '); p.appendChild(ps);
+    }
+    historia.push({role:'user',content:t},{role:'assistant',content:resp});
+    if(fin.pasos&&fin.pasos.some(x=>x.tipo==='escritura')) setTimeout(cargar,600);
+    if(fin.pasos&&fin.pasos.some(x=>x.tipo==='archivo'||x.tipo==='tablero'||x.tipo==='memoria') && vista==='archivos') pintarArchivos();
+    m.scrollTop=m.scrollHeight;
+  }catch(e){ p.classList.remove('pen'); pen.remove(); txt.textContent='No pude conectar: '+e.message; }
+}
+cargar();
+</script>
+</body>
+</html>
