@@ -364,7 +364,9 @@ function crear(deps) {
   const empresasDe = typeof deps.empresas === "function" ? deps.empresas : () => deps.empresas || null;
   const CAMPOS = deps.CAMPOS || {};
   const modelo = deps.modelo || process.env.MODELO || "claude-opus-5";
-  const esfuerzo = deps.esfuerzo || process.env.ESFUERZO || "high";
+  // "medium" alcanza para casi todo lo del campo y sale bastante menos que "high".
+  // Se sube con la variable ESFUERZO cuando hace falta exprimirlo (xhigh, max).
+  const esfuerzo = deps.esfuerzo || process.env.ESFUERZO || "medium";
   const cliente = deps.cliente || new Anthropic();
   const MAX_VUELTAS = 16;
 
