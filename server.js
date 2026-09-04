@@ -664,6 +664,12 @@ app.get("/adjuntos/:id/:nombre?", (req, res) => {
   res.send(a.bytes);
 });
 
+// Cuánto sale tener el bot andando (tokens y dólares estimados).
+app.get("/api/uso", (req, res) => {
+  try { res.json(bot.uso(dbDe(req), { desde: req.query.desde, hasta: req.query.hasta })); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Lo que el bot recuerda del campo.
 app.get("/api/memoria", (req, res) => { try { res.json(bot.memorias(dbDe(req))); } catch (e) { res.json([]); } });
 app.post("/api/memoria", (req, res) => {

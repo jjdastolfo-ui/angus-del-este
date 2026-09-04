@@ -22,6 +22,18 @@ const Anthropic = require("@anthropic-ai/sdk");
 
 const hoyIso = () => new Date().toISOString().slice(0, 10);
 
+// Precio por millón de tokens: entrada, salida, lectura de caché, escritura de caché.
+// Si el modelo no está en la lista, se usa el de Opus 5.
+const PRECIOS = {
+  "claude-opus-5": [5, 25, 0.5, 6.25], "claude-opus-4-8": [5, 25, 0.5, 6.25], "claude-opus-4-7": [5, 25, 0.5, 6.25],
+  "claude-sonnet-5": [2, 10, 0.2, 2.5], "claude-sonnet-4-6": [3, 15, 0.3, 3.75],
+  "claude-fable-5-1": [10, 50, 1, 12.5], "claude-haiku-4-5": [1, 5, 0.1, 1.25]
+};
+function costoUsd(uso, modelo) {
+  const p = PRECIOS[modelo] || PRECIOS["claude-opus-5"];
+  return Math.round(((uso.input || 0) * p[0] + (uso.output || 0) * p[1] + (uso.cache_read || 0) * p[2] + (uso.cache_creation || 0) * p[3]) / 1e6 * 1e6) / 1e6;
+}
+
 function init(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS memoria (
@@ -39,6 +51,15 @@ function init(db) {
       texto TEXT NOT NULL,
       created_at TEXT DEFAULT (datetime('now')));
     CREATE INDEX IF NOT EXISTS idx_conv ON conversaciones(canal, usuario, id);
+    -- Lo que consume cada respuesta del bot, para saber cuánto sale tenerlo andando.
+    CREATE TABLE IF NOT EXISTS uso_bot (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      fecha TEXT NOT NULL, modelo TEXT, canal TEXT, usuario TEXT,
+      entrada INTEGER DEFAULT 0, salida INTEGER DEFAULT 0,
+      cache_lectura INTEGER DEFAULT 0, cache_escritura INTEGER DEFAULT 0,
+      vueltas INTEGER DEFAULT 0, segundos REAL, usd REAL,
+      created_at TEXT DEFAULT (datetime('now')));
+    CREATE INDEX IF NOT EXISTS idx_uso_fecha ON uso_bot(fecha);
   `);
 }
 
@@ -635,6 +656,7 @@ ${cal.cortes ? `Bloques de la parición en curso: cabeza hasta ${cal.cortes.CABE
   async function conversar(db, campoNombre, mensajes, opciones = {}) {
     const ctx = { campoKey: opciones.campoKey, campoNombre, soloLectura: opciones.soloLectura, usuario: opciones.usuario };
     const emitir = e => { try { opciones.onEvento && opciones.onEvento(e); } catch (x) {} };
+    const t0 = Date.now();
     const pasos = [];
     const uso = { input: 0, output: 0, cache_read: 0, cache_creation: 0 };
     const historia = [...mensajes];
@@ -715,6 +737,13 @@ ${cal.cortes ? `Bloques de la parición en curso: cabeza hasta ${cal.cortes.CABE
       guardarTurno(db, opciones.canal, opciones.usuario, "user", textoUsuario);
       guardarTurno(db, opciones.canal, opciones.usuario, "assistant", respuesta);
     }
+    const usd = costoUsd(uso, modelo);
+    try {
+      db.prepare(`INSERT INTO uso_bot (fecha, modelo, canal, usuario, entrada, salida, cache_lectura, cache_escritura, vueltas, segundos, usd)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(hoyIso(), modelo, opciones.canal || "web", opciones.usuario || null,
+        uso.input, uso.output, uso.cache_read, uso.cache_creation, pasos.length, Math.round((Date.now() - t0) / 100) / 10, usd);
+    } catch (e) {}
+    uso.usd = usd;
     emitir({ tipo: "fin", respuesta, pasos, uso });
     return { respuesta, pasos, uso, modelo, motivo };
   }
@@ -726,7 +755,29 @@ ${cal.cortes ? `Bloques de la parición en curso: cabeza hasta ${cal.cortes.CABE
     return conversar(db, campoNombre, [...previos, { role: "user", content: texto }], opciones);
   }
 
-  return { HERRAMIENTAS, instrucciones, parteEstable, parteVolatil, conversar, responder, ejecutar,
+  /** Cuánto se gastó: hoy, este mes, y el detalle de los últimos días. */
+  function uso(db, opciones = {}) {
+    const q = (sql, ...p) => { try { return db.prepare(sql).all(...p); } catch (x) { return []; } };
+    const desde = opciones.desde || new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const hasta = opciones.hasta || hoyIso();
+    const filas = q(`SELECT fecha, COUNT(*) consultas, SUM(entrada) entrada, SUM(salida) salida, SUM(cache_lectura) cache_lectura,
+      SUM(cache_escritura) cache_escritura, SUM(usd) usd FROM uso_bot WHERE fecha BETWEEN ? AND ? GROUP BY fecha ORDER BY fecha DESC`, desde, hasta);
+    const porCanal = q(`SELECT canal, COUNT(*) consultas, SUM(usd) usd FROM uso_bot WHERE fecha BETWEEN ? AND ? GROUP BY canal ORDER BY usd DESC`, desde, hasta);
+    const suma = k => filas.reduce((s, f) => s + (Number(f[k]) || 0), 0);
+    const hoy = filas.find(f => f.fecha === hoyIso()) || {};
+    const mes = filas.filter(f => f.fecha.startsWith(hoyIso().slice(0, 7)));
+    const r2 = n => Math.round((n || 0) * 100) / 100;
+    return { modelo, desde, hasta,
+      hoy: { consultas: hoy.consultas || 0, usd: r2(hoy.usd) },
+      mes: { consultas: mes.reduce((s, f) => s + f.consultas, 0), usd: r2(mes.reduce((s, f) => s + (f.usd || 0), 0)) },
+      periodo: { consultas: suma("consultas"), usd: r2(suma("usd")), entrada: suma("entrada"), salida: suma("salida"),
+        cache_lectura: suma("cache_lectura"), cache_escritura: suma("cache_escritura"),
+        promedio_por_consulta: suma("consultas") ? Math.round(suma("usd") / suma("consultas") * 10000) / 10000 : 0,
+        ahorro_cache: r2(suma("cache_lectura") / 1e6 * ((PRECIOS[modelo] || PRECIOS["claude-opus-5"])[0] - (PRECIOS[modelo] || PRECIOS["claude-opus-5"])[2])) },
+      por_dia: filas.map(f => ({ ...f, usd: r2(f.usd) })), por_canal: porCanal.map(f => ({ ...f, usd: r2(f.usd) })) };
+  }
+
+  return { HERRAMIENTAS, instrucciones, parteEstable, parteVolatil, conversar, responder, ejecutar, uso, costoUsd,
     exportarDesdeBot, relevarDesdeBot, recordar, memorias, historial, conversacion, guardarTurno, modelo, esfuerzo };
 }
 
