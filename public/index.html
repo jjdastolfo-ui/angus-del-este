@@ -1182,7 +1182,7 @@ async function pintarEmpresa(){
         <tr><td><b>Total</b></td><td></td><td class="num"><b>${st.totales.plantel}</b></td><td class="num"><b>${st.totales.venta}</b></td><td class="num"><b>${st.totales.cabezas}</b></td><td></td><td class="num"><b>${st.totales.kg_total.toLocaleString('es-AR')}</b></td><td></td></tr></tbody></table></div></div>`:''}
       <div class="caja"><h3>Madres y padres que están en otro campo</h3>
         <p class="ayuda">Un ternero puede estar en un campo y su madre en otro. Acá se ven los que quedaron sin vincular y se arreglan de una vez. Los ambiguos (más de un candidato) hay que resolverlos de a uno desde la ficha del animal.</p>
-        <div class="acciones"><button class="btn g" onclick="revisarVinculos()">Revisar</button><button class="btn" id="vinArreglar" onclick="arreglarVinculos()" disabled>Arreglar los claros</button><button class="btn g" id="vinExternos" onclick="marcarExternos()" disabled>Marcar el semen como de afuera</button><span class="mut" id="vinEstado" style="font-size:12px"></span></div>
+        <div class="acciones"><button class="btn g" onclick="revisarVinculos()">Revisar</button><button class="btn" id="vinArreglar" onclick="arreglarVinculos()" disabled>Arreglar los claros</button><button class="btn g" id="vinExternos" onclick="marcarExternos()" disabled>Marcar el semen como de afuera</button><button class="btn g" id="vinDup" onclick="buscarDuplicados()">Terneros cargados dos veces</button><span class="mut" id="vinEstado" style="font-size:12px"></span></div>
         <div class="res" id="vinRes"></div>
       </div>
       <div class="caja"><h3>Trasladar animales a otro campo</h3>
@@ -1233,6 +1233,47 @@ async function revisarVinculos(){
     }
     document.getElementById("vinRes").innerHTML = html || "<div class=\"aviso ok\" style=\"margin:0\">Ningún animal quedó con la madre o el padre sin encontrar.</div>";
   }catch(e){ est.textContent=""; document.getElementById("vinRes").innerHTML="<div class=\"aviso mal\" style=\"margin:0\">"+esc(e.message)+"</div>"; }
+}
+// El mismo ternero anotado en dos campos: uno con un RP armado, otro con el real.
+async function buscarDuplicados(){
+  const est=document.getElementById("vinEstado"); est.textContent="Buscando terneros repetidos…";
+  try{
+    const campos = camposTodos.filter(function(c){ return c.empresa===empresaActual; });
+    let todos=[], porCampo=[];
+    for(const c of campos){
+      const r=await fetch(API+"/api/vinculos/duplicados?campo="+encodeURIComponent(c.key)).then(x=>x.json());
+      if(r.error||!r.pares) continue;
+      if(r.pares.length){ porCampo.push({campo:c, pares:r.pares}); todos=todos.concat(r.pares); }
+    }
+    est.textContent = todos.length ? todos.length+" terneros aparecen dos veces" : "No hay terneros repetidos entre campos";
+    let html="";
+    for(const g of porCampo){
+      html += "<h3 class=\"s\" style=\"margin-top:14px\">"+esc(g.campo.nombre)+" <span class=\"mut\" style=\"font-weight:300;letter-spacing:0;text-transform:none\">"+g.pares.length+"</span></h3>"
+        + "<div class=\"tw\"><table><thead><tr><th>Madre</th><th>Nacimiento</th><th>Acá</th><th>En el otro campo</th><th>Queda</th><th>Por qué</th></tr></thead><tbody>"
+        + g.pares.slice(0,40).map(function(p){
+            return "<tr><td class=\"rp\">"+esc(p.madre)+"</td><td class=\"mut\">"+(fec(p.fecha_nac)||"—")+"</td>"
+              + "<td>"+esc(p.aca.rp)+(p.aca.armado?" <span class=\"mut\">(armado)</span>":"")+"</td>"
+              + "<td>"+esc(p.alla.rp)+" <span class=\"tag t-cola\">"+esc(p.alla.campo_nombre)+"</span></td>"
+              + "<td><b>"+esc(p.queda.rp)+"</b></td><td class=\"mut\">"+esc(p.porque)+"</td></tr>";
+          }).join("")
+        + "</tbody></table></div>";
+    }
+    if(todos.length) html += "<div class=\"acciones\" style=\"margin-top:10px\"><button class=\"btn\" onclick=\"unificarDuplicados()\">Unificar los "+todos.length+"</button><span class=\"mut\" style=\"font-size:12px\">El repetido queda marcado DUPLICADO, con una nota. No se borra nada.</span></div>";
+    document.getElementById("vinRes").innerHTML = html || "<div class=\"aviso ok\" style=\"margin:0\">Ningún ternero está cargado dos veces.</div>";
+  }catch(e){ est.textContent=""; document.getElementById("vinRes").innerHTML="<div class=\"aviso mal\" style=\"margin:0\">"+esc(e.message)+"</div>"; }
+}
+async function unificarDuplicados(){
+  if(!confirm("El registro repetido queda marcado como DUPLICADO y deja de contar como parto. No se borra nada. ¿Seguimos?")) return;
+  const est=document.getElementById("vinEstado"); est.textContent="Unificando…";
+  try{
+    const campos = camposTodos.filter(function(c){ return c.empresa===empresaActual; });
+    let n=0;
+    for(const c of campos){
+      const r=await fetch(API+"/api/vinculos/duplicados?campo="+encodeURIComponent(c.key),{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}).then(x=>x.json());
+      if(!r.error) n+=r.bien||0;
+    }
+    toast(n+" terneros unificados",5000); buscarDuplicados(); cargar();
+  }catch(e){ est.textContent="No pude: "+e.message; }
 }
 async function marcarExternos(){
   if(!confirm("Los padres que parecen semen o toros de afuera dejarán de figurar como error. ¿Seguimos?")) return;
