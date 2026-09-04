@@ -73,7 +73,7 @@ const CAMPO_DEFAULT = Object.keys(CAMPOS)[0];
 const bases = {};
 
 function getDB(key) {
-  const k = CAMPOS[key] ? key : CAMPO_DEFAULT;
+  const k = claveCampo(key) || CAMPO_DEFAULT;
   if (bases[k]) return bases[k];
   if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
   const db = new Database(path.join(DB_DIR, `${k}.db`));
@@ -89,8 +89,8 @@ function getDB(key) {
   bases[k] = db;
   return db;
 }
-const dbDe = req => getDB(req.query.campo || (req.body && req.body.campo) || CAMPO_DEFAULT);
-const campoDe = req => { const k = req.query.campo || (req.body && req.body.campo); return CAMPOS[k] ? k : CAMPO_DEFAULT; };
+const dbDe = req => getDB(campoDe(req));
+const campoDe = req => { const k = req.query.campo || (req.body && req.body.campo); return claveCampo(k) || CAMPO_DEFAULT; };
 // Las empresas se arman con los campos; se crean después de getDB porque lo usan.
 let empresas;
 const empresasDe = () => empresas || (empresas = empresasMod.crear({ CAMPOS, getDB, plantelMod, animalesMod, destinosMod, finanzasMod }));
@@ -267,10 +267,23 @@ app.delete("/api/tableros/:slug", (req, res) => {
 
 // ?empresa=clave o ?de_campo=clave: sólo los campos de esa empresa (así, embebido en el
 // portal, cada organización ve los suyos y no los de las demás).
+// Una clave de campo o de empresa, aunque venga con otra mayúscula/minúscula.
+function claveCampo(k) { if (!k) return null; if (CAMPOS[k]) return k; const n = String(k).toLowerCase(); return Object.keys(CAMPOS).find(x => x.toLowerCase() === n) || null; }
 app.get("/api/campos", (req, res) => {
   const em = empresasDe();
-  const empresaKey = req.query.empresa || (req.query.de_campo && CAMPOS[req.query.de_campo] ? em.empresaDe(req.query.de_campo).key : null);
+  const pedido = req.query.de_campo ? claveCampo(req.query.de_campo) : null;
+  let empresaKey = null, aviso = null;
+  if (req.query.empresa) {
+    const ek = Object.keys(em.empresas).find(x => x.toLowerCase() === String(req.query.empresa).toLowerCase());
+    if (ek) empresaKey = ek; else { empresaKey = em.empresaDe(CAMPO_DEFAULT).key; aviso = `No existe la empresa "${req.query.empresa}"`; }
+  } else if (req.query.de_campo) {
+    // Pidieron un campo: se muestra su empresa. Si la clave no existe, la del campo
+    // por defecto, y se avisa: nunca todos los campos de todas las empresas.
+    empresaKey = em.empresaDe(pedido || CAMPO_DEFAULT).key;
+    if (!pedido) aviso = `No existe el campo "${req.query.de_campo}". Las claves son: ${Object.keys(CAMPOS).join(", ")}`;
+  }
   const entradas = Object.entries(CAMPOS).filter(([key]) => !empresaKey || em.empresaDe(key).key === empresaKey);
+  if (aviso) res.setHeader("X-Aviso", encodeURIComponent(aviso));
   res.json(entradas.map(([key, c]) => {
     let n = 0;
     try { n = getDB(key).prepare("SELECT COUNT(*) n FROM animales WHERE upper(COALESCE(estado,'ACTIVO'))='ACTIVO'").get().n; }
@@ -659,9 +672,40 @@ const WA_PERMITIDOS = String(process.env.WHATSAPP_PERMITIDOS || "").split(",").m
 let WA_CAMPOS = {}; try { WA_CAMPOS = JSON.parse(process.env.WHATSAPP_CAMPOS || "{}"); } catch (e) {}
 const soloDigitos = s => String(s || "").replace(/\D/g, "");
 
-function clienteTwilio() {
-  if (!(process.env.TWILIO_SID || process.env.TWILIO_ACCOUNT_SID) || !(process.env.TWILIO_TOKEN || process.env.TWILIO_AUTH_TOKEN)) return null;
-  return require("twilio")((process.env.TWILIO_SID || process.env.TWILIO_ACCOUNT_SID), (process.env.TWILIO_TOKEN || process.env.TWILIO_AUTH_TOKEN));
+// ── Los números del bot ──────────────────────────────────────────────────────
+// Puede haber varios: cada uno con su cuenta de Twilio y su campo. Se arman con
+// las variables que hay:
+//   · el principal: TWILIO_NUMBER + TWILIO_SID/TWILIO_ACCOUNT_SID + TWILIO_TOKEN/TWILIO_AUTH_TOKEN → CAMPO_DEFAULT
+//   · cada WHATSAPP_<SUFIJO> (ej. WHATSAPP_POSTA = "whatsapp:+549…") usa TWILIO_SID_<SUFIJO> y
+//     TWILIO_TOKEN_<SUFIJO> si existen (si no, los principales) y el campo WHATSAPP_CAMPO_<SUFIJO>;
+//     si no está, se busca un campo cuya clave contenga el sufijo (POSTA → angus_la_posta).
+function numerosWhatsApp() {
+  const sidBase = process.env.TWILIO_SID || process.env.TWILIO_ACCOUNT_SID || null;
+  const tokenBase = process.env.TWILIO_TOKEN || process.env.TWILIO_AUTH_TOKEN || null;
+  const lista = [];
+  if (process.env.TWILIO_NUMBER) lista.push({ nombre: "principal", numero: soloDigitos(process.env.TWILIO_NUMBER), sid: sidBase, token: tokenBase, campo: CAMPO_DEFAULT });
+  for (const [k, v] of Object.entries(process.env)) {
+    const m = k.match(/^WHATSAPP_([A-Z0-9]+)$/);
+    if (!m || ["PERMITIDOS", "CAMPOS"].includes(m[1]) || !soloDigitos(v)) continue;
+    const suf = m[1];
+    const campoExplicito = process.env["WHATSAPP_CAMPO_" + suf];
+    const campoAdivinado = Object.keys(CAMPOS).find(c => c.toUpperCase().includes(suf)) || null;
+    lista.push({ nombre: suf.toLowerCase(), numero: soloDigitos(v), sid: process.env["TWILIO_SID_" + suf] || sidBase,
+      token: process.env["TWILIO_TOKEN_" + suf] || tokenBase, campo: (campoExplicito && CAMPOS[campoExplicito]) ? campoExplicito : campoAdivinado || CAMPO_DEFAULT });
+  }
+  return lista;
+}
+// A qué número le escribieron: dice la cuenta con la que responder y el campo.
+function numeroDe(to) {
+  const d = soloDigitos(to);
+  const lista = numerosWhatsApp();
+  return lista.find(n => n.numero && d && (n.numero === d || d.endsWith(n.numero) || n.numero.endsWith(d))) || lista[0] ||
+    { nombre: "principal", numero: d, sid: process.env.TWILIO_SID || process.env.TWILIO_ACCOUNT_SID || null, token: process.env.TWILIO_TOKEN || process.env.TWILIO_AUTH_TOKEN || null, campo: CAMPO_DEFAULT };
+}
+function clienteTwilio(cuenta) {
+  const c = cuenta || numeroDe("");
+  if (!c.sid || !c.token) return null;
+  return require("twilio")(c.sid, c.token);
 }
 
 // WhatsApp corta en 1600 caracteres: se parte por párrafos, sin cortar palabras.
@@ -693,8 +737,9 @@ async function enviarWhatsApp(twilio, from, to, texto) {
 }
 
 // Lo que llega por WhatsApp (foto, PDF, planilla, audio…) se baja de Twilio.
-async function bajarMedia(url, mimeDeclarado) {
-  const auth = Buffer.from(`${(process.env.TWILIO_SID || process.env.TWILIO_ACCOUNT_SID)}:${(process.env.TWILIO_TOKEN || process.env.TWILIO_AUTH_TOKEN)}`).toString("base64");
+async function bajarMedia(url, mimeDeclarado, cuenta) {
+  const c = cuenta || numeroDe("");
+  const auth = Buffer.from(`${c.sid}:${c.token}`).toString("base64");
   const r = await fetch(url, { headers: { Authorization: `Basic ${auth}` }, redirect: "follow" });
   if (!r.ok) throw new Error(`No pude bajar el adjunto (${r.status})`);
   const mime = (r.headers.get("content-type") || mimeDeclarado || "application/octet-stream").split(";")[0];
@@ -716,9 +761,12 @@ app.post("/webhook", async (req, res) => {
     console.log(`whatsapp: ${de} no está en WHATSAPP_PERMITIDOS, se ignora`);
     return;
   }
-  const campoKey = CAMPOS[WA_CAMPOS[numero]] ? WA_CAMPOS[numero] : CAMPO_DEFAULT;
+  // El número al que escribieron decide la cuenta y el campo; WHATSAPP_CAMPOS (por remitente) manda si está.
+  const cuenta = numeroDe(a);
+  const campoKey = CAMPOS[WA_CAMPOS[numero]] ? WA_CAMPOS[numero] : cuenta.campo;
   const db = getDB(campoKey);
-  const twilio = clienteTwilio();
+  const twilio = clienteTwilio(cuenta);
+  console.log(`whatsapp: ${de} → ${a} (${cuenta.nombre}) · campo ${campoKey}`);
 
   // Si tarda, un aviso para que no parezca que no llegó.
   let respondido = false;
@@ -729,7 +777,7 @@ app.post("/webhook", async (req, res) => {
     if (nMedia) {
       const adjuntos = [];
       for (let i = 0; i < Math.min(nMedia, 4); i++) {
-        try { adjuntos.push(await bajarMedia(req.body[`MediaUrl${i}`], req.body[`MediaContentType${i}`])); }
+        try { adjuntos.push(await bajarMedia(req.body[`MediaUrl${i}`], req.body[`MediaContentType${i}`], cuenta)); }
         catch (e) { adjuntos.push({ nombre: `adjunto${i + 1}.bin`, mime: "application/octet-stream", buffer: Buffer.alloc(0) }); console.error("whatsapp media:", e.message); }
       }
       mensaje = adjuntosMod.preparar(db, { texto, adjuntos, canal: "whatsapp", usuario: de }).content;
@@ -856,7 +904,9 @@ app.get("/api/volumen", (req, res) => {
 });
 
 app.get("/api/salud", (req, res) => {
-  const out = { version: VERSION, modelo: MODELO, esfuerzo: bot.esfuerzo, ...(ERRORES_CONFIG.length ? { errores_config: ERRORES_CONFIG } : {}), empresas: empresasDe().lista(), campos: {} };
+  const out = { version: VERSION, modelo: MODELO, esfuerzo: bot.esfuerzo, ...(ERRORES_CONFIG.length ? { errores_config: ERRORES_CONFIG } : {}),
+    whatsapp: numerosWhatsApp().map(n => ({ numero: n.nombre, termina_en: n.numero.slice(-4), campo: n.campo, cuenta: n.sid ? "configurada" : "FALTA" })),
+    empresas: empresasDe().lista(), campos: {} };
   for (const k of Object.keys(CAMPOS)) {
     try {
       const db = getDB(k);
@@ -894,7 +944,7 @@ app.get("/", (req, res) => {
 });
 
 // Para poder probar las funciones sin levantar el servidor.
-module.exports = { app, getDB, bot, guardarTablero, registrarSalida, empresasDe, CAMPOS, CAMPO_DEFAULT, partirMensaje, absolutizar };
+module.exports = { app, getDB, bot, guardarTablero, registrarSalida, empresasDe, numerosWhatsApp, numeroDe, CAMPOS, CAMPO_DEFAULT, partirMensaje, absolutizar };
 
 if (require.main === module) app.listen(PORT, () => {
   console.log(`${VERSION} en el puerto ${PORT} · modelo ${MODELO} · esfuerzo ${bot.esfuerzo}`);
