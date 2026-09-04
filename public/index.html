@@ -502,7 +502,12 @@ async function cargar(){
   try{
     fetch(`${API}/api/salud`).then(r=>r.json()).then(s=>{ if(s.modelo) document.getElementById('chModelo').textContent = s.modelo + (s.esfuerzo?' · esfuerzo '+s.esfuerzo:''); }).catch(()=>{});
     // Sólo los campos de la empresa que entró (la del campo pedido, o la pedida por nombre).
-    const q = empresaPedida ? `?empresa=${encodeURIComponent(empresaPedida)}` : campo ? `?de_campo=${encodeURIComponent(campo)}` : '';
+    // Dentro del portal manda lo que dice la URL (campo y org), nunca lo guardado de otra visita.
+    const campoUrl = params.get('campo'), orgUrl = params.get('org');
+    if(embebido && !campoUrl) campo = '';
+    const q = empresaPedida ? `?empresa=${encodeURIComponent(empresaPedida)}`
+      : (campoUrl || orgUrl) ? `?${campoUrl?'de_campo='+encodeURIComponent(campoUrl):''}${campoUrl&&orgUrl?'&':''}${orgUrl?'org='+encodeURIComponent(orgUrl):''}`
+      : campo ? `?de_campo=${encodeURIComponent(campo)}` : '';
     const rc = await fetch(`${API}/api/campos${q}`);
     let campos = await rc.json();
     const avisoCampo = rc.headers.get('X-Aviso') ? decodeURIComponent(rc.headers.get('X-Aviso')) : null;
