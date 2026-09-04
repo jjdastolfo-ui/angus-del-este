@@ -1,0 +1,22 @@
+{
+  "name": "rodeo",
+  "version": "1.2.0",
+  "description": "Sistema ganadero: bot con acceso a la base, tablero, búsqueda, relevamiento de campo y emisión de archivos",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "semilla": "node datos/semilla.js",
+    "prueba": "node datos/prueba.js",
+    "evaluar": "node datos/evaluar.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.123.0",
+    "better-sqlite3": "^13.0.3",
+    "express": "^4.21.0",
+    "twilio": "^5.3.0",
+    "xlsx": "^0.18.5"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
