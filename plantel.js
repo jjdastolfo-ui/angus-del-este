@@ -207,8 +207,41 @@ function armarVientre(db, v, ctx) {
     ORDER BY a.fecha_nac`).all(v.rp);
   // Los hijos que están en otro campo de la empresa cuentan como partos suyos:
   // si no, la vaca figura vacía cuando en realidad crió afuera.
-  const deFuera = (ctx.criasFuera ? ctx.criasFuera(v.rp) : []).filter(c => !criasAca.some(x => String(x.rp).toUpperCase() === String(c.rp).toUpperCase()));
-  const crias = [...criasAca, ...deFuera].sort((a, b) => String(a.fecha_nac || "").localeCompare(String(b.fecha_nac || "")));
+  //
+  // Ojo con el mismo ternero cargado dos veces: una en el campo de la madre con
+  // un RP armado ("HB557-21") y otra donde vive, con su RP de verdad. Se
+  // reconocen porque son de la misma madre, nacieron el mismo día, son del mismo
+  // sexo y pesaron casi lo mismo. Se cuenta uno solo, y queda el que tiene el
+  // dato más completo (destete antes que peso al nacer).
+  const mismoTernero = (a, b) => {
+    if (String(a.rp).toUpperCase() === String(b.rp).toUpperCase()) return true;
+    if (!a.fecha_nac || !b.fecha_nac || a.fecha_nac !== b.fecha_nac) return false;
+    const sa = String(a.sexo || "").toUpperCase().slice(0, 1), sb = String(b.sexo || "").toUpperCase().slice(0, 1);
+    if (sa && sb && sa !== sb) return false;                        // mellizos de distinto sexo
+    if (a.pn > 0 && b.pn > 0 && Math.abs(a.pn - b.pn) > 4) return false;
+    return true;
+  };
+  // Un RP que lleva adentro el RP de la madre ("HB557-21") está armado: el bueno
+  // es el otro, el del animal de verdad.
+  const armado = rpHijo => {
+    const h = String(rpHijo || "").toUpperCase().replace(/[^A-Z0-9]/g, ""), m = String(v.rp || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    return !!(m && m.length >= 2 && h !== m && h.includes(m));
+  };
+  const puntaje = c => (armado(c.rp) ? 0 : 8) + (c.destete > 0 ? 2 : 0) + (c.pn > 0 ? 1 : 0);
+  const vivo = c => String(c.estado || "ACTIVO").toUpperCase() !== "DUPLICADO";
+  const deFuera = (ctx.criasFuera ? ctx.criasFuera(v.rp) : []).filter(vivo);
+  const locales = criasAca.filter(vivo);
+  const duplicadas = [];
+  const combinadas = [...locales];
+  for (const f of deFuera) {
+    const i = combinadas.findIndex(x => mismoTernero(x, f));
+    if (i < 0) { combinadas.push(f); continue; }
+    duplicadas.push({ queda: null, otro: null });
+    if (puntaje(f) > puntaje(combinadas[i])) { duplicadas[duplicadas.length - 1] = { queda: f, otro: combinadas[i] }; combinadas[i] = f; }
+    else duplicadas[duplicadas.length - 1] = { queda: combinadas[i], otro: f };
+  }
+  const crias = combinadas.sort((a, b) => String(a.fecha_nac || "").localeCompare(String(b.fecha_nac || "")));
+  const deFueraContadas = crias.filter(c => c.campo).length;
 
   let notas = [];
   try {
@@ -297,7 +330,8 @@ function armarVientre(db, v, ctx) {
     edad_meses: edadM, edad_rara: edadRara,
     peso_adulto: pAdulto,
     partos: crias.length,
-    hijos_otros_campos: deFuera.length || undefined,
+    hijos_otros_campos: deFueraContadas || undefined,
+    hijos_repetidos: duplicadas.length || undefined,
     ternero_campo: criaAnio && criaAnio.campo ? criaAnio.campo : undefined,
     ternero_campo_nombre: criaAnio && criaAnio.campo_nombre ? criaAnio.campo_nombre : undefined,
     pn_prom: prom(pns),

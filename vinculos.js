@@ -367,6 +367,104 @@ function crear({ CAMPOS, getDB, empresasDe }) {
     return mapa;
   }
 
+  // ── EL MISMO TERNERO, CARGADO DOS VECES ────────────────────────────────────
+  // Pasa con las cargas viejas: el ternero se anotó en el campo de la madre con
+  // un RP armado ("HB557-21" = la madre B557, año 21) y otra vez en el campo
+  // donde se crió, con su RP de verdad. Son el mismo animal si tienen la misma
+  // madre, nacieron el mismo día, son del mismo sexo y pesaron casi lo mismo.
+
+  const mismoTernero = (a, b) => {
+    if (!a.fecha_nac || !b.fecha_nac || a.fecha_nac !== b.fecha_nac) return false;
+    const sa = String(a.sexo || "").toUpperCase().slice(0, 1), sb = String(b.sexo || "").toUpperCase().slice(0, 1);
+    if (sa && sb && sa !== sb) return false;                 // mellizos de distinto sexo
+    if (a.pn > 0 && b.pn > 0 && Math.abs(a.pn - b.pn) > 4) return false;
+    return true;
+  };
+  // Un RP que lleva adentro el RP de la madre está armado, no es el del animal.
+  const rpArmado = (rpHijo, rpMadre) => {
+    const h = compacto(rpHijo), m = compacto(rpMadre);
+    return !!(m && m.length >= 2 && h !== m && h.includes(m));
+  };
+
+  /** Los terneros que figuran dos veces, uno en cada campo. */
+  function duplicados(campoKey, opciones = {}) {
+    const db = getDB(campoKey);
+    const empresa = empresasDe().empresaDe(campoKey);
+    const mapa = mapaCriasFuera(campoKey, { fresco: opciones.fresco });
+    const pares = [];
+    if (!mapa.size) return { campo: campoKey, campo_nombre: nombreCampo(campoKey), empresa: empresa.nombre, pares, resumen: { total: 0 } };
+
+    const locales = db.prepare(`SELECT h.id, h.rp, h.fecha_nac, h.sexo, h.estado, h.madre_rp,
+        (SELECT peso FROM pesadas p WHERE p.animal_id=h.id AND upper(COALESCE(p.contexto,''))='NACIMIENTO' ORDER BY p.fecha LIMIT 1) pn,
+        (SELECT peso FROM pesadas p WHERE p.animal_id=h.id AND upper(COALESCE(p.contexto,''))='DESTETE' ORDER BY p.fecha DESC LIMIT 1) destete,
+        (SELECT COUNT(*) FROM pesadas p WHERE p.animal_id=h.id) n_pesadas
+      FROM animales h WHERE COALESCE(h.madre_rp,'') <> '' AND upper(COALESCE(h.estado,'ACTIVO')) <> 'DUPLICADO'`).all();
+
+    for (const l of locales) {
+      const fuera = mapa.get(compacto(l.madre_rp)) || [];
+      for (const f of fuera) {
+        if (String(f.estado || "").toUpperCase() === "DUPLICADO") continue;
+        if (!mismoTernero(l, f)) continue;
+        // Cuál queda: el que no tenga un RP armado; si empatan, el de más datos.
+        const armadoL = rpArmado(l.rp, l.madre_rp), armadoF = rpArmado(f.rp, l.madre_rp);
+        const puntos = c => (c.destete > 0 ? 4 : 0) + (c.pn > 0 ? 2 : 0) + ((c.n_pesadas || 0) > 1 ? 1 : 0);
+        let queda, sobra;
+        if (armadoL !== armadoF) { queda = armadoL ? f : l; sobra = armadoL ? l : f; }
+        else if (puntos(f) !== puntos(l)) { queda = puntos(f) > puntos(l) ? f : l; sobra = puntos(f) > puntos(l) ? l : f; }
+        else { queda = f; sobra = l; }   // ante la duda, el que vive en su campo
+        pares.push({
+          madre: l.madre_rp, fecha_nac: l.fecha_nac, sexo: l.sexo,
+          aca: { rp: l.rp, campo: campoKey, campo_nombre: nombreCampo(campoKey), pn: l.pn, destete: l.destete, armado: armadoL },
+          alla: { rp: f.rp, campo: f.campo, campo_nombre: f.campo_nombre, pn: f.pn, destete: f.destete, armado: armadoF },
+          queda: { rp: queda.rp, campo: queda.campo || campoKey },
+          sobra: { rp: sobra.rp, campo: sobra.campo || campoKey },
+          porque: armadoL !== armadoF ? `"${(armadoL ? l : f).rp}" está armado con el RP de la madre`
+            : puntos(f) !== puntos(l) ? "queda el que tiene más datos cargados" : "queda el que está en su propio campo"
+        });
+      }
+    }
+    return { campo: campoKey, campo_nombre: nombreCampo(campoKey), empresa: empresa.nombre,
+      pares: pares.slice(0, opciones.limite || 500),
+      resumen: { total: pares.length, sobran_aca: pares.filter(p => p.sobra.campo === campoKey).length } };
+  }
+
+  /**
+   * Unifica: el registro que sobra queda marcado DUPLICADO (no se borra nada) y
+   * se le anota de quién es duplicado. Deja de contar en partos y estadísticas.
+   */
+  function unificar(campoKey, opciones = {}) {
+    const d = duplicados(campoKey, { fresco: true, limite: 5000 });
+    let pares = d.pares;
+    if (Array.isArray(opciones.pares) && opciones.pares.length) {
+      pares = pares.filter(p => opciones.pares.some(x =>
+        compacto(x.rp || x.sobra) === compacto(p.sobra.rp) || compacto(x.rp || x.queda) === compacto(p.queda.rp)));
+    }
+    const out = [];
+    for (const p of pares) {
+      const r = { madre: p.madre, fecha_nac: p.fecha_nac, queda: p.queda, sobra: p.sobra, porque: p.porque, ok: false };
+      out.push(r);
+      if (!CAMPOS[p.sobra.campo]) { r.error = `No existe el campo ${p.sobra.campo}`; continue; }
+      r.ok = true;
+      if (opciones.simular) continue;
+      try {
+        const dbS = getDB(p.sobra.campo);
+        dbS.prepare("UPDATE animales SET estado='DUPLICADO' WHERE upper(rp)=upper(?)").run(p.sobra.rp);
+        try {
+          dbS.prepare("INSERT INTO notas_campo (animal_rp, fecha, texto, usuario) VALUES (?,?,?,?)")
+            .run(p.sobra.rp, new Date().toISOString().slice(0, 10),
+              `Es el mismo ternero que ${p.queda.rp} en ${nombreCampo(p.queda.campo)} (misma madre ${p.madre} y misma fecha de parto). Queda como duplicado.`,
+              opciones.usuario || "unificar");
+        } catch (e) {}
+        r.hecho = true;
+      } catch (e) { r.ok = false; r.error = e.message; }
+    }
+    olvidar();
+    const bien = out.filter(r => r.ok).length;
+    return { ok: bien > 0, simulado: !!opciones.simular, campo: campoKey, total: out.length, bien, filas: out,
+      mensaje: `${bien} ternero${bien === 1 ? "" : "s"} ${bien === 1 ? (opciones.simular ? "figura" : "figuraba") : (opciones.simular ? "figuran" : "figuraban")} dos veces` +
+        (opciones.simular ? ". Se marcaría el registro repetido como duplicado y dejaría de contar." : ` y quedó${bien === 1 ? "" : "ron"} unificado${bien === 1 ? "" : "s"}: el repetido pasó a DUPLICADO y ya no cuenta como parto.`) };
+  }
+
   /** Los hijos que este animal tiene en los otros campos de la empresa. */
   function hijosFuera(campoKey, rp, nombre) {
     const empresa = empresasDe().empresaDe(campoKey);
@@ -404,7 +502,7 @@ function crear({ CAMPOS, getDB, empresasDe }) {
   }
 
   return { init, indice, buscarEnEmpresa, revisar, revisarEmpresa, aplicar, marcarExternos, externos,
-    olvidarExterno, hijosFuera, mapaCriasFuera, familiaFuera, olvidar, caravanaColor };
+    olvidarExterno, hijosFuera, mapaCriasFuera, duplicados, unificar, familiaFuera, olvidar, caravanaColor };
 }
 
 module.exports = { init, crear, caravanaColor };

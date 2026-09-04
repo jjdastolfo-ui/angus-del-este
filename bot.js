@@ -286,7 +286,9 @@ const HERRAMIENTAS = [
       "Ojo: muchos padres que \"no existen\" son semen de IATF o toros prestados (KARE 16, IVAR 4): eso no es un error. " +
       "El revisar los marca como probable_externo; con accion=externos se anotan y dejan de figurar.",
     input_schema: { type: "object", properties: {
-      accion: { type: "string", enum: ["revisar", "arreglar", "buscar", "externos"], description: "revisar (default) · arreglar · buscar · externos (marcar padres que son semen o toros de afuera, para que dejen de figurar como error)" },
+      accion: { type: "string", enum: ["revisar", "arreglar", "buscar", "externos", "duplicados", "unificar"], description:
+        "revisar (default) · arreglar · buscar · externos (marcar padres que son semen o toros de afuera) · " +
+        "duplicados (el mismo ternero cargado en dos campos, típico de cargas viejas: uno con un RP armado como \"HB557-21\" y otro con su RP real) · unificar (marcar el repetido como duplicado)" },
       valores: { type: "array", items: { type: "string" }, description: "externos: los nombres a marcar. Sin esto, todos los que el sistema detectó como probables." },
       q: { type: "string", description: "buscar: el RP, nombre o caravana a encontrar en los otros campos." },
       todos_los_campos: { type: "boolean", description: "revisar: mirar todos los campos de la empresa, no sólo éste." },
@@ -585,6 +587,11 @@ ${cal.cortes ? `Bloques de la parición en curso: cabeza hasta ${cal.cortes.CABE
           if (ctx.soloLectura && !input.simular) throw new Error("Esta sesión es de sólo lectura");
           return v.aplicar(k, { filas: input.filas, simular: input.simular, usuario });
         }
+        if (input.accion === "duplicados") return v.duplicados(k, { fresco: true });
+        if (input.accion === "unificar") {
+          if (ctx.soloLectura && !input.simular) throw new Error("Esta sesión es de sólo lectura");
+          return v.unificar(k, { pares: input.filas, simular: input.simular, usuario });
+        }
         if (input.accion === "externos") {
           if (ctx.soloLectura && !input.simular) throw new Error("Esta sesión es de sólo lectura");
           return v.marcarExternos(k, { valores: input.valores, simular: input.simular });
@@ -681,7 +688,11 @@ ${cal.cortes ? `Bloques de la parición en curso: cabeza hasta ${cal.cortes.CABE
     if (nombre === "crear_tablero") return `armo el tablero "${input.titulo}"`;
     if (nombre === "exportar_archivo") return `armo el archivo "${input.titulo}"`;
     if (nombre === "destinar") return input.accion === "sacar" ? `le saco el destino a ${(input.rps || []).length} animal(es)` : input.accion === "salida" ? `registro la salida de ${(input.rps || []).length} animal(es)` : `marco ${(input.rps || []).length} animal(es) → ${input.destino}`;
-    if (nombre === "vinculos") return input.accion === "arreglar" ? "arreglo los vínculos entre campos" : input.accion === "buscar" ? `busco "${input.q}" en todos los campos` : "reviso las madres y padres de otros campos";
+    if (nombre === "vinculos") return input.accion === "arreglar" ? "arreglo los vínculos entre campos"
+      : input.accion === "buscar" ? `busco "${input.q}" en todos los campos`
+      : input.accion === "duplicados" ? "busco terneros cargados dos veces"
+      : input.accion === "unificar" ? "unifico los terneros repetidos"
+      : "reviso las madres y padres de otros campos";
     if (nombre === "finanzas") return `consulto el financiero (${input.consulta || "resumen"})`;
     if (nombre === "finanzas_registrar") return input.simular ? "preparo el movimiento" : `registro ${input.concepto} en el financiero`;
     if (nombre === "campos") return "miro todos los campos de la empresa";

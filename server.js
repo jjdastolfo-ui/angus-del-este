@@ -988,6 +988,16 @@ app.delete("/api/vinculos/externos/:valor", (req, res) => {
   try { res.json(vinculosDe().olvidarExterno(campoDe(req), decodeURIComponent(req.params.valor))); } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
+// El mismo ternero cargado en dos campos (cargas viejas): detectar y unificar.
+app.get("/api/vinculos/duplicados", (req, res) => {
+  try { res.json(vinculosDe().duplicados(campoDe(req), { fresco: true })); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post("/api/vinculos/duplicados", (req, res) => {
+  try { res.json(vinculosDe().unificar(campoDe(req), req.body || {})); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+
 // Buscar un animal en todos los campos de la empresa.
 app.get("/api/buscar-empresa", (req, res) => {
   try { res.json(vinculosDe().buscarEnEmpresa(campoDe(req), req.query.q, { excluir: req.query.excluir_propio === "1" ? campoDe(req) : null })); }

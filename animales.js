@@ -132,7 +132,8 @@ const SQL_LISTA = `
     (SELECT peso FROM pesadas p WHERE p.animal_id=a.id ORDER BY p.fecha DESC, p.id DESC LIMIT 1) peso_actual,
     (SELECT fecha FROM pesadas p WHERE p.animal_id=a.id ORDER BY p.fecha DESC, p.id DESC LIMIT 1) ultima_pesada,
     (SELECT COUNT(*) FROM pesadas p WHERE p.animal_id=a.id) n_pesadas,
-    (SELECT COUNT(*) FROM animales h WHERE upper(COALESCE(h.madre_rp,''))=upper(a.rp)) crias,
+    (SELECT COUNT(*) FROM animales h WHERE upper(COALESCE(h.madre_rp,''))=upper(a.rp)
+       AND upper(COALESCE(h.estado,'ACTIVO'))<>'DUPLICADO') crias,
     (SELECT l.nombre FROM lote_animales la JOIN lotes l ON l.id=la.lote_id
      WHERE la.animal_id=a.id ORDER BY la.fecha_ingreso DESC LIMIT 1) lote_actual,
     (SELECT l.potrero FROM lote_animales la JOIN lotes l ON l.id=la.lote_id

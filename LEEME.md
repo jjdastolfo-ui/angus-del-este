@@ -96,6 +96,16 @@ calculados con esos hijos, y el historial de partos dice en qué campo nació ca
 uno. Lo mismo con los toros: suman los hijos que tuvieron sirviendo en otro campo.
 Pasa solo, al leer: no hace falta pedirle nada al bot.
 
+**El mismo ternero cargado dos veces.** En las cargas viejas pasa que un ternero
+se anotó en el campo de la madre con un RP armado ("HB557-21" = la madre B557,
+año 21) y otra vez en el campo donde se crió, con su RP de verdad. Se reconocen
+porque son de la misma madre, nacieron el mismo día, son del mismo sexo y pesaron
+casi lo mismo. Cuentan como **un solo parto** desde el momento en que se lee, y
+en el historial queda el RP real, no el armado. Para limpiarlo de una vez, en la
+pestaña Empresa: "Terneros cargados dos veces" los lista y "Unificar" marca el
+repetido como DUPLICADO con una nota (no se borra nada, y deja de contar).
+Un mellizo de distinto sexo nunca se toma por duplicado.
+
 Para no equivocarse cuando dos campos tienen animales con el mismo número, una
 cría se atribuye a la madre de otro campo sólo si no puede ser de una madre del
 suyo (o el vínculo ya está anotado). El asterisco al lado de "Partos" o "Hijos"
