@@ -503,8 +503,11 @@ async function cargar(){
     fetch(`${API}/api/salud`).then(r=>r.json()).then(s=>{ if(s.modelo) document.getElementById('chModelo').textContent = s.modelo + (s.esfuerzo?' · esfuerzo '+s.esfuerzo:''); }).catch(()=>{});
     // Sólo los campos de la empresa que entró (la del campo pedido, o la pedida por nombre).
     const q = empresaPedida ? `?empresa=${encodeURIComponent(empresaPedida)}` : campo ? `?de_campo=${encodeURIComponent(campo)}` : '';
-    let campos = await fetch(`${API}/api/campos${q}`).then(r=>r.json());
+    const rc = await fetch(`${API}/api/campos${q}`);
+    let campos = await rc.json();
+    const avisoCampo = rc.headers.get('X-Aviso') ? decodeURIComponent(rc.headers.get('X-Aviso')) : null;
     if(!campos.length) campos = await fetch(`${API}/api/campos`).then(r=>r.json());
+    if(avisoCampo){ campo=''; setTimeout(()=>toast(avisoCampo, 9000), 500); }
     const sel=document.getElementById('selCampo');
     sel.innerHTML = campos.map(c=>`<option value="${c.key}" ${c.key===campo?'selected':''}>${esc(c.nombre)} — ${c.animales} cab.</option>`).join('');
     sel.style.display = campos.length>1?'':'none';
