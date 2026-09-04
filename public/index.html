@@ -1230,17 +1230,31 @@ async function pintarArchivos(){
     </div>`;
 }
 async function usoBot(){
-  const t=document.getElementById('usoTexto'); if(!t) return;
+  const t=document.getElementById("usoTexto"); if(!t) return;
   try{
-    const u=await fetch(urlCampo('/api/uso')).then(r=>r.json());
+    const u=await fetch(urlCampo("/api/uso")).then(r=>r.json());
     if(u.error) throw new Error(u.error);
-    const d=n=>'US$ '+(n||0).toFixed(2);
-    t.innerHTML=`Modelo <b>${esc(u.modelo)}</b>. Hoy: <b>${u.hoy.consultas}</b> consultas, <b>${d(u.hoy.usd)}</b>. Este mes: <b>${u.mes.consultas}</b> consultas, <b>${d(u.mes.usd)}</b>. Promedio por consulta: ${d(u.periodo.promedio_por_consulta)}. El caché ahorró ${d(u.periodo.ahorro_cache)} en los últimos 30 días. La cifra exacta la cobra Anthropic en <a href="https://console.anthropic.com/settings/usage" target="_blank">su consola</a>.`;
-    document.getElementById('usoDetalle').innerHTML = u.por_dia.length ? `
-      <div class="tw" style="margin-top:10px"><table><thead><tr><th>Día</th><th class="num">Consultas</th><th class="num">Entrada</th><th class="num">Salida</th><th class="num">Caché leído</th><th class="num">US$</th></tr></thead>
-      <tbody>${u.por_dia.slice(0,14).map(f=>`<tr><td class="mono">${fec(f.fecha)}</td><td class="num">${f.consultas}</td><td class="num">${(f.entrada||0).toLocaleString('es-AR')}</td><td class="num">${(f.salida||0).toLocaleString('es-AR')}</td><td class="num">${(f.cache_lectura||0).toLocaleString('es-AR')}</td><td class="num"><b>${d(f.usd)}</b></td></tr>`).join('')}</tbody></table></div>
-      ${u.por_canal.length>1?`<p class="ayuda" style="margin-top:8px">Por canal: ${u.por_canal.map(c=>`${esc(c.canal)} ${c.consultas} (${d(c.usd)})`).join(' · ')}</p>`:''}` : '<div class="vacio" style="padding:14px">Todavía no hubo consultas</div>`;
-  }catch(e){ t.textContent='No pude leer el uso: '+e.message; }
+    const d=n=>"US$ "+(n||0).toFixed(2), mil=n=>(n||0).toLocaleString("es-AR");
+    t.innerHTML = "Modelo <b>"+esc(u.modelo)+"</b>. Hoy: <b>"+u.hoy.consultas+"</b> consultas, <b>"+d(u.hoy.usd)+"</b>. "
+      + "Este mes: <b>"+u.mes.consultas+"</b> consultas, <b>"+d(u.mes.usd)+"</b>. "
+      + "Promedio por consulta: "+d(u.periodo.promedio_por_consulta)+". El caché ahorró "+d(u.periodo.ahorro_cache)+" en los últimos 30 días. "
+      + "La cifra exacta la cobra Anthropic en <a href=\"https://console.anthropic.com/settings/usage\" target=\"_blank\">su consola</a>.";
+    let html = "";
+    if(u.por_dia.length){
+      html = "<div class=\"tw\" style=\"margin-top:10px\"><table><thead><tr><th>Día</th><th class=\"num\">Consultas</th>"
+        + "<th class=\"num\">Entrada</th><th class=\"num\">Salida</th><th class=\"num\">Caché leído</th><th class=\"num\">US$</th></tr></thead><tbody>"
+        + u.por_dia.slice(0,14).map(function(f){
+            return "<tr><td class=\"mono\">"+fec(f.fecha)+"</td><td class=\"num\">"+f.consultas+"</td><td class=\"num\">"+mil(f.entrada)
+              + "</td><td class=\"num\">"+mil(f.salida)+"</td><td class=\"num\">"+mil(f.cache_lectura)+"</td><td class=\"num\"><b>"+d(f.usd)+"</b></td></tr>";
+          }).join("")
+        + "</tbody></table></div>";
+      if(u.por_canal.length>1){
+        html += "<p class=\"ayuda\" style=\"margin-top:8px\">Por canal: "
+          + u.por_canal.map(function(c){ return esc(c.canal)+" "+c.consultas+" ("+d(c.usd)+")"; }).join(" · ") + "</p>";
+      }
+    } else html = "<div class=\"vacio\" style=\"padding:14px\">Todavía no hubo consultas</div>";
+    document.getElementById("usoDetalle").innerHTML = html;
+  }catch(e){ t.textContent="No pude leer el uso: "+e.message; }
 }
 async function finanzasEstado(){
   const t=document.getElementById('finTexto'); if(!t) return;
