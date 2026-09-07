@@ -1375,7 +1375,11 @@ async function usoBot(){
     const u=await fetch(urlCampo("/api/uso")).then(r=>r.json());
     if(u.error) throw new Error(u.error);
     const d=n=>"US$ "+(n||0).toFixed(2), mil=n=>(n||0).toLocaleString("es-AR");
-    t.innerHTML = "Modelo <b>"+esc(u.modelo)+"</b>. Hoy: <b>"+u.hoy.consultas+"</b> consultas, <b>"+d(u.hoy.usd)+"</b>. "
+    const nom=function(m){ return String(m||"").replace("claude-","").replace(/-/g," "); };
+    const comoRutea = u.ruteo==="auto"
+      ? "Las preguntas directas y las cargas van a <b>"+esc(nom(u.modelo_simple))+"</b>; los análisis, a <b>"+esc(nom(u.modelo))+"</b>."
+      : "Ruteo fijo: todo va a <b>"+esc(nom(u.ruteo==="simple"||u.ruteo==="barato"?u.modelo_simple:u.modelo))+"</b>.";
+    t.innerHTML = comoRutea+" Hoy: <b>"+u.hoy.consultas+"</b> consultas, <b>"+d(u.hoy.usd)+"</b>. "
       + "Este mes: <b>"+u.mes.consultas+"</b> consultas, <b>"+d(u.mes.usd)+"</b>. "
       + "Promedio por consulta: "+d(u.periodo.promedio_por_consulta)+". El caché ahorró "+d(u.periodo.ahorro_cache)+" en los últimos 30 días. "
       + "La cifra exacta la cobra Anthropic en <a href=\"https://console.anthropic.com/settings/usage\" target=\"_blank\">su consola</a>.";
@@ -1391,6 +1395,19 @@ async function usoBot(){
       if(u.por_canal.length>1){
         html += "<p class=\"ayuda\" style=\"margin-top:8px\">Por canal: "
           + u.por_canal.map(function(c){ return esc(c.canal)+" "+c.consultas+" ("+d(c.usd)+")"; }).join(" · ") + "</p>";
+      }
+      var pm = u.por_modelo || [];
+      if(pm.length){
+        html += "<div class=\"tw\" style=\"margin-top:12px\"><table><thead><tr><th>Modelo</th><th class=\"num\">Consultas</th>"
+          + "<th class=\"num\">US$</th><th class=\"num\">Por consulta</th></tr></thead><tbody>"
+          + pm.map(function(m){
+              return "<tr><td>"+esc(nom(m.modelo))+"</td><td class=\"num\">"+m.consultas+"</td>"
+                + "<td class=\"num\"><b>"+d(m.usd)+"</b></td><td class=\"num\">"+d(m.promedio)+"</td></tr>";
+            }).join("")
+          + "</tbody></table></div>";
+        var ahorro = (u.sin_ruteo||0) - (u.periodo.usd||0);
+        if(ahorro > 0.01) html += "<p class=\"ayuda\" style=\"margin-top:8px\">Con todo en "+esc(nom(u.modelo))
+          + " estos 30 días habrían salido "+d(u.sin_ruteo)+": el ruteo ahorró <b>"+d(ahorro)+"</b>.</p>";
       }
     } else html = "<div class=\"vacio\" style=\"padding:14px\">Todavía no hubo consultas</div>";
     document.getElementById("usoDetalle").innerHTML = html;
@@ -1541,11 +1558,12 @@ async function enviar(){
     p.classList.remove('pen'); pen.remove();
     const resp = fin.respuesta||fin.error||'No entendí.';
     txt.innerHTML=linkear(resp);
-    if(fin.pasos&&fin.pasos.length){
+    const partes=[]; const nc=(fin.pasos||[]).filter(x=>x.tipo==='consulta').length; if(nc) partes.push(nc+' consulta(s)');
+    if((fin.pasos||[]).some(x=>x.tipo==='escritura')) partes.push('escribió'); if((fin.pasos||[]).some(x=>x.tipo==='archivo')) partes.push('armó un archivo');
+    if((fin.pasos||[]).some(x=>x.tipo==='tablero')) partes.push('armó un tablero'); if((fin.pasos||[]).some(x=>x.tipo==='memoria')) partes.push('anotó en la memoria');
+    if(fin.modelo) partes.push(String(fin.modelo).replace('claude-','').replace(/-/g,' '));
+    if(partes.length){
       const ps=document.createElement('div'); ps.className='pasos';
-      const partes=[]; const nc=fin.pasos.filter(x=>x.tipo==='consulta').length; if(nc) partes.push(nc+' consulta(s)');
-      if(fin.pasos.some(x=>x.tipo==='escritura')) partes.push('escribió'); if(fin.pasos.some(x=>x.tipo==='archivo')) partes.push('armó un archivo');
-      if(fin.pasos.some(x=>x.tipo==='tablero')) partes.push('armó un tablero'); if(fin.pasos.some(x=>x.tipo==='memoria')) partes.push('anotó en la memoria');
       ps.textContent=partes.join(' · '); p.appendChild(ps);
     }
     historia.push({role:'user',content:t},{role:'assistant',content:resp});
