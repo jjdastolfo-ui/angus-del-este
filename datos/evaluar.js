@@ -36,9 +36,11 @@ const PRECIOS = { "claude-opus-5": [5, 25, 0.5], "claude-sonnet-5": [2, 10, 0.2]
 const costo = (uso, modelo) => { const p = PRECIOS[modelo] || PRECIOS["claude-opus-5"]; return (uso.input * p[0] + uso.output * p[1] + uso.cache_read * p[2] + uso.cache_creation * p[0] * 1.25) / 1e6; };
 
 (async () => {
-  console.log(`Modelo ${S.bot.modelo} · esfuerzo ${S.bot.esfuerzo} · ${lista.length} preguntas\n`);
+  console.log(`Ruteo ${S.bot.ruteo}: ${S.bot.modelo} (esfuerzo ${S.bot.esfuerzo}) y ${S.bot.modeloSimple} · ${lista.length} preguntas\n`);
   const resultados = [];
   const total = { input: 0, output: 0, cache_read: 0, cache_creation: 0 };
+  // El gasto se cuenta con el modelo que contestó cada pregunta, no con el configurado.
+  const porModelo = {};
   for (const p of lista) {
     const t0 = Date.now();
     const usuario = p.depende ? `eval-${p.depende}` : `eval-${p.id}`;
@@ -49,19 +51,26 @@ const costo = (uso, modelo) => { const p = PRECIOS[modelo] || PRECIOS["claude-op
     } catch (e) { r = { respuesta: `ERROR: ${e.message}`, pasos: [], uso: total }; v = { ok: false, esperado: "sin error", motivo: e.message }; }
     const seg = Math.round((Date.now() - t0) / 100) / 10;
     for (const k of Object.keys(total)) total[k] += (r.uso || {})[k] || 0;
+    const m = r.modelo || S.bot.modelo;
+    const acum = porModelo[m] || (porModelo[m] = { preguntas: 0, input: 0, output: 0, cache_read: 0, cache_creation: 0 });
+    acum.preguntas++;
+    for (const k of ["input", "output", "cache_read", "cache_creation"]) acum[k] += (r.uso || {})[k] || 0;
     resultados.push({ id: p.id, pregunta: p.pregunta, ok: v.ok, esperado: v.esperado, motivo: v.motivo, respuesta: r.respuesta, pasos: r.pasos, uso: r.uso, segundos: seg });
-    console.log(`${v.ok ? "✓" : "✗"} ${p.id.padEnd(18)} ${seg}s  ${(r.pasos || []).filter(x => x.tipo === "consulta").length} consultas  ${v.ok ? "" : `— esperaba: ${v.esperado}${v.motivo ? " (" + v.motivo + ")" : ""}`}`);
+    console.log(`${v.ok ? "✓" : "✗"} ${p.id.padEnd(18)} ${seg}s  ${(r.pasos || []).filter(x => x.tipo === "consulta").length} consultas  ${String(m).replace("claude-", "").padEnd(12)}${r.reintento ? " (reintento)" : ""}  ${v.ok ? "" : `— esperaba: ${v.esperado}${v.motivo ? " (" + v.motivo + ")" : ""}`}`);
     if (!v.ok) console.log(`    respondió: ${String(r.respuesta).replace(/\s+/g, " ").slice(0, 300)}`);
   }
   const bien = resultados.filter(r => r.ok).length;
-  const usd = costo(total, S.bot.modelo);
+  const usd = Object.entries(porModelo).reduce((s, [m, u]) => s + costo(u, m), 0);
   console.log(`\n${bien}/${resultados.length} correctas · tokens: ${total.input} entrada, ${total.output} salida, ${total.cache_read} de caché · ≈ US$ ${usd.toFixed(2)} (${(usd / resultados.length * 100).toFixed(1)} centavos por pregunta)`);
+  console.log("Por modelo: " + Object.entries(porModelo).map(([m, u]) => `${m.replace("claude-", "")} ${u.preguntas} (US$ ${costo(u, m).toFixed(2)})`).join(" · "));
+  const todoGrande = costo(total, S.bot.modelo);
+  if (todoGrande - usd > 0.005) console.log(`Con todo en ${S.bot.modelo} habría salido US$ ${todoGrande.toFixed(2)}: el ruteo ahorró US$ ${(todoGrande - usd).toFixed(2)}.`);
   if (total.cache_read === 0 && resultados.length > 1) console.log("Ojo: no hubo lecturas de caché. Algo cambia el prompt entre llamadas.");
 
   const carpeta = path.join(__dirname, "evaluaciones");
   if (!fs.existsSync(carpeta)) fs.mkdirSync(carpeta);
   const archivo = path.join(carpeta, `${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}_${S.bot.modelo}_${S.bot.esfuerzo}.json`);
-  fs.writeFileSync(archivo, JSON.stringify({ modelo: S.bot.modelo, esfuerzo: S.bot.esfuerzo, fecha: new Date().toISOString(), bien, total: resultados.length, tokens: total, usd, resultados }, null, 1));
+  fs.writeFileSync(archivo, JSON.stringify({ modelo: S.bot.modelo, modelo_simple: S.bot.modeloSimple, ruteo: S.bot.ruteo, por_modelo: porModelo, esfuerzo: S.bot.esfuerzo, fecha: new Date().toISOString(), bien, total: resultados.length, tokens: total, usd, resultados }, null, 1));
   console.log(`Informe en ${path.relative(process.cwd(), archivo)}`);
   db.close();
   fs.rmSync(dir, { recursive: true, force: true });

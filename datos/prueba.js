@@ -33,6 +33,19 @@ let fallas = 0, n = 0;
 function ok(cond, que) { n++; if (!cond) { fallas++; console.log("  FALLÓ:", que); } }
 function seccion(t) { console.log("\n" + t); }
 
+seccion("El tablero");
+// Que el JavaScript del tablero sea válido: un error de sintaxis deja la pantalla
+// en blanco y no lo ve ninguna otra prueba.
+const indexHtml = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
+const bloques = indexHtml.match(/<script>[\s\S]*?<\/script>/g) || [];
+ok(bloques.length >= 1, "el tablero tiene su script");
+for (const [i, b] of bloques.entries()) {
+  let err = null;
+  try { new (require("vm").Script)(b.replace(/^<script>/, "").replace(/<\/script>$/, ""), { filename: "index.html" }); } catch (e) { err = e.message; }
+  ok(!err, `el script ${i + 1} del tablero es JavaScript válido${err ? ": " + err : ""}`);
+}
+ok(/<\/html>\s*$/.test(indexHtml.trim()), "el HTML del tablero está cerrado");
+
 seccion("Buscar");
 const b1 = animalesMod.buscar(db, "011");
 ok(b1.length && b1[0].rp === "11", "'011' encuentra a la 11 primero");
@@ -233,7 +246,7 @@ const bot1 = botMod.crear({ plantelMod, animalesMod, destinosMod, exportarMod, r
       return { content: [texto(`Fallaron ${out.total} vacas.`)] };
     }
   ]) });
-ok(bot1.HERRAMIENTAS.map(h => h.name).join() === "plantel,ficha,toros,buscar,consultar,escribir,relevar,crear_tablero,exportar_archivo,destinar,leer_adjunto,importar_adjunto,campos,trasladar,finanzas,recordar", "las dieciséis herramientas, en orden fijo");
+ok(bot1.HERRAMIENTAS.map(h => h.name).join() === "plantel,ficha,toros,buscar,consultar,escribir,relevar,crear_tablero,exportar_archivo,destinar,leer_adjunto,importar_adjunto,campos,trasladar,vinculos,finanzas,finanzas_registrar,recordar", "las dieciocho herramientas, en orden fijo");
 const eventos = [];
 (async () => {
   const r = await bot1.responder(db, "Prueba", "¿cuántas fallaron?", { campoKey: "principal", canal: "web", usuario: "prueba", onEvento: e => eventos.push(e) });
@@ -257,8 +270,58 @@ const eventos = [];
   ok(bot2.parteVolatil(db).includes(new Date().toISOString().slice(0, 10)), "la fecha va en la parte volátil");
   // Los parámetros de la llamada: modelo, thinking adaptativo, esfuerzo, caché en el system.
   const params = clienteFalsoParams();
-  ok(params.thinking.type === "adaptive" && params.output_config.effort === bot2.esfuerzo && params.system[0].cache_control.type === "ephemeral", "manda thinking adaptativo, esfuerzo y cache_control");
-  ok(params.model === bot2.modelo && bot2.modelo === (process.env.MODELO || "claude-opus-5"), "usa el modelo configurado (Opus 5 por defecto)");
+  ok(params.system[0].cache_control.type === "ephemeral", "manda el cache_control en la parte estable");
+  // El pensamiento adaptativo es de los modelos nuevos: al barato no se le manda.
+  ok(!params.thinking && !params.output_config, "al modelo barato no se le mandan thinking ni esfuerzo");
+  const botG = botMod.crear({ plantelMod, animalesMod, destinosMod, exportarMod, relevarMod, guardarTablero: S.guardarTablero, CAMPOS: S.CAMPOS,
+    ruteo: "grande", cliente: clienteFalso([() => ({ content: [texto("listo")] })]) });
+  await botG.responder(db, "Prueba", "¿cuántas fallaron?", { campoKey: "principal" });
+  const pg = clienteFalsoParams();
+  ok(pg.model === botG.modelo && pg.thinking.type === "adaptive" && pg.output_config.effort === botG.esfuerzo, "al modelo bueno sí: thinking adaptativo y esfuerzo");
+  ok(bot2.modelo === (process.env.MODELO || "claude-opus-5") && bot2.modeloSimple === (process.env.MODELO_SIMPLE || "claude-haiku-4-5"), "los dos modelos configurados (Opus 5 y Haiku por defecto)");
+  ok(params.model === bot2.modeloSimple, "una pregunta corta y directa la contesta el modelo barato");
+
+  // ── El ruteo: qué va al modelo barato y qué al bueno ──────────────────────
+  const alSimple = ["¿cuántas vacas hay?", "cuánto pesó la 148", "ficha de la 23", "cargá 15 kg a la 100",
+    "mostrame las preñadas", "12 450\n13 470\n14 490\n15 505", "anotá que la 7 parió hoy"];
+  const alGrande = ["¿por qué bajó el destete este año?", "qué vacas conviene descartar",
+    "revisá si hay algo mal cargado", "armame un tablero de eficiencia", "compará los dos campos",
+    "cuáles son las mejores madres del rodeo"];
+  const malSimple = alSimple.filter(t => bot2.elegirModelo(t).modelo !== bot2.modeloSimple);
+  const malGrande = alGrande.filter(t => bot2.elegirModelo(t).modelo !== bot2.modelo);
+  ok(!malSimple.length, "las consultas directas y las cargas van al modelo barato" + (malSimple.length ? ": " + malSimple.join(" | ") : ""));
+  ok(!malGrande.length, "lo que hay que analizar va al modelo bueno" + (malGrande.length ? ": " + malGrande.join(" | ") : ""));
+  ok(bot2.elegirModelo("dame la ficha", { conAdjuntos: true }).modelo === bot2.modelo, "si hay archivos para leer, va al bueno");
+  ok(bot2.elegirModelo("").modelo === bot2.modelo && bot2.elegirModelo("x".repeat(300)).modelo === bot2.modelo, "sin texto o con un mensaje largo, el bueno");
+
+  // Una lista de "RP peso", por larga que sea, es carga: modelo barato.
+  const listaPesadas = Array.from({ length: 40 }, (_, i) => `${100 + i} ${380 + i}`).join("\n");
+  ok(bot2.elegirModelo(listaPesadas).modelo === bot2.modeloSimple, "una lista larga de pesadas sigue siendo carga");
+
+  // Si el barato no llega a nada, se rehace con el bueno y se cobran los dos.
+  const usados = [];
+  const bot2b = botMod.crear({ plantelMod, animalesMod, destinosMod, exportarMod, relevarMod, guardarTablero: S.guardarTablero, CAMPOS: S.CAMPOS,
+    cliente: clienteFalso([
+      (params) => { usados.push(params.model); return { content: [texto("")] }; },
+      (params) => { usados.push(params.model); return { content: [texto("Quedaron 12 vacas vacías.")] }; }
+    ]) });
+  const rEsc = await bot2b.responder(db, "Prueba", "cuántas vacías hay", { campoKey: "principal" });
+  ok(usados.length === 2 && usados[0] === bot2b.modeloSimple && usados[1] === bot2b.modelo, "si el barato no contesta, se rehace con el bueno");
+  ok(rEsc.respuesta === "Quedaron 12 vacas vacías." && rEsc.reintento === true && rEsc.modelo === bot2b.modelo, "la respuesta que vale es la del bueno");
+
+  const usados2 = [];
+  const bot2c = botMod.crear({ plantelMod, animalesMod, destinosMod, exportarMod, relevarMod, guardarTablero: S.guardarTablero, CAMPOS: S.CAMPOS,
+    cliente: clienteFalso([
+      (params) => { usados2.push(params.model); return { content: [uso("t9", "destinar", { rps: ["13"], destino: "engorde" })] }; },
+      (params) => { usados2.push(params.model); return { content: [texto("")] }; }
+    ]) });
+  await bot2c.responder(db, "Prueba", "poné la 13 en engorde", { campoKey: "principal" });
+  ok(usados2.length === 2 && usados2.every(m => m === bot2c.modeloSimple), "si ya escribió en la base no se rehace: no se carga dos veces");
+
+  // Con MODELO_RUTEO fijo no hay ruteo ni reintento.
+  const botFijo = botMod.crear({ plantelMod, animalesMod, destinosMod, exportarMod, relevarMod, guardarTablero: S.guardarTablero, CAMPOS: S.CAMPOS,
+    ruteo: "grande", cliente: clienteFalso([() => ({ content: [texto("ok")] })]) });
+  ok(botFijo.elegirModelo("cuántas vacas hay").modelo === botFijo.modelo, "MODELO_RUTEO=grande manda todo al bueno");
 
   // Memoria: el bot guarda y después lo lee en el prompt.
   const bot3 = botMod.crear({ plantelMod, animalesMod, destinosMod, exportarMod, relevarMod, guardarTablero: S.guardarTablero, CAMPOS: S.CAMPOS,
@@ -380,6 +443,27 @@ const eventos = [];
   db.prepare("UPDATE animales SET estado='ACTIVO' WHERE rp IN ('21','23')").run(); db.prepare("DELETE FROM destinos WHERE animal_rp IN ('21','23')").run();
   const fq = await finanzasMod.consultar(db, { consulta: "transacciones", concepto: "sanidad", desde: "2026-08-01" });
   ok(fq.total === 1 && fq.egresos === 300 && fq.por_concepto.SANIDAD.n === 1, "consulta transacciones filtra por concepto y fecha y suma");
+  // Registrar un gasto en el financiero.
+  const sim3 = await finanzasMod.registrarMovimiento(db, { concepto: "sanidad", egreso: 300, detalle: "ivermectina", proveedor: "Diego Pioli", simular: true });
+  ok(sim3.simulado && !sim3.enviado && sim3.movimiento.concepto === "SANIDAD" && /Listo para registrar/.test(sim3.mensaje), "simular un gasto no escribe y lo muestra");
+  const gasto = await finanzasMod.registrarMovimiento(db, { concepto: "sanidad", egreso: 300, detalle: "ivermectina", proveedor: "Diego Pioli", fecha: "2026-09-03" });
+  const txg = recibido[recibido.length - 1];
+  ok(gasto.ok && gasto.enviado && txg.body.concepto === "SANIDAD" && txg.body.egreso === 300 && txg.body.proveedor === "Diego Pioli" && /ivermectina/.test(txg.body.detalle) && /desde RODEO/.test(txg.body.detalle), "el gasto llega al financiero con concepto, monto, proveedor y detalle");
+  // Un financiero viejo: no tiene POST /api/transacciones, recibe por /api/ejecutar-accion.
+  const viejo = [];
+  finanzasMod.setFetch(async (urlCompleta, op) => {
+    const u = new URL(urlCompleta); const ruta = u.pathname;
+    viejo.push({ ruta, body: op && op.body ? JSON.parse(op.body) : null });
+    if (ruta === "/api/transacciones" && op.method === "POST") return { ok: false, status: 404, text: async () => "Cannot POST /api/transacciones" };
+    if (ruta === "/api/ejecutar-accion") return { ok: true, status: 200, text: async () => JSON.stringify({ respuesta: "✅ Registrado!" }) };
+    return { ok: true, status: 200, text: async () => "{}" };
+  });
+  const gastoViejo = await finanzasMod.registrarMovimiento(db, { concepto: "alimento", egreso: 500, detalle: "maíz" });
+  ok(gastoViejo.ok && viejo.some(v => v.ruta === "/api/ejecutar-accion" && v.body.accion === "registrar_transaccion" && v.body.egreso === 500 && v.body.concepto === "ALIMENTO"), "si el financiero es viejo, el gasto entra por ejecutar-accion");
+  ok(viejo[0].ruta === "/api/transacciones", "primero intenta la ruta nueva");
+  finanzasMod.setFetch(async (urlCompleta, op) => { const u = new URL(urlCompleta); const url = u.origin + u.pathname; recibido.push({ url, query: Object.fromEntries(u.searchParams), body: op && op.body ? JSON.parse(op.body) : null }); const cuerpo = url.endsWith("/api/transacciones") && op.method === "POST" ? { ok: true, id: 77 } : url.endsWith("/api/resumen") ? { ingresos_mes: 8500, egresos_mes: 400 } : {}; return { ok: true, status: 200, text: async () => JSON.stringify(cuerpo) }; });
+  let errG = null; try { await finanzasMod.registrarMovimiento(db, { concepto: "SANIDAD" }); } catch (e) { errG = e.message; }
+  ok(/Falta el monto/.test(errG), "sin monto no registra nada");
   const est = await finanzasMod.estado(db);
   ok(est.configurado && est.conecta && est.ultimos.length >= 2, "el estado muestra conexión y los últimos enlaces");
   const bot9 = botMod.crear({ plantelMod, animalesMod, destinosMod, exportarMod, relevarMod, guardarTablero: S.guardarTablero, CAMPOS: S.CAMPOS, finanzasMod,
@@ -414,6 +498,130 @@ const eventos = [];
   ok(animalesMod.ficha(dbT, "C900").notas.some(x => /Llegó de Angus del Este/.test(x.texto)) && animalesMod.ficha(db, "C900").notas.some(x => /Trasladado a El Triunfo/.test(x.texto)), "queda una nota en los dos campos");
   let errT = null; try { em.trasladar({ rps: ["11"], desde: "principal", hasta: "principal" }); } catch (e) { errT = e.message; }
   ok(/mismo campo/.test(errT), "no deja trasladar al mismo campo");
+  // ── Vínculos entre campos ──
+  // Los dos campos de prueba salen de la misma semilla, así que para probar el
+  // cruce hace falta gente que exista en uno solo.
+  const vin = S.vinculosDe();
+  const dbT2 = S.getDB("triunfo");
+  db.prepare("INSERT INTO animales (rp, sexo, categoria, estado, fecha_nac) VALUES (?,?,?,?,?)").run("Z777", "H", "VACA", "ACTIVO", "2019-08-01");
+  db.prepare("INSERT INTO animales (rp, nombre, sexo, categoria, estado, fecha_nac) VALUES (?,?,?,?,?,?)").run("T777", "ZEUS UNICO", "M", "TORO", "ACTIVO", "2018-08-01");
+  // El ternero está en El Triunfo; a la madre la anotaron con espacio y minúscula, al padre por nombre.
+  dbT2.prepare("INSERT INTO animales (rp, sexo, categoria, estado, fecha_nac, madre_rp, padre_rp) VALUES (?,?,?,?,?,?,?)")
+    .run("X900", "M", "TERNERO", "ACTIVO", "2026-08-01", "z 777", "ZEUS UNICO");
+  vin.olvidar();
+  const busca = vin.buscarEnEmpresa("triunfo", "z 777", { excluir: "triunfo" });
+  ok(busca.length === 1 && busca[0].campo === "principal" && busca[0].rp === "Z777", "buscarEnEmpresa encuentra a la madre en el otro campo aunque esté escrita distinto");
+  const rev = vin.revisar("triunfo", { fresco: true });
+  const fMadre = rev.filas.find(f => f.rp === "X900" && f.relacion === "madre");
+  ok(fMadre && fMadre.estado === "en_otro_campo" && fMadre.propuesta.campo === "principal" && fMadre.propuesta.rp === "Z777", "revisar ubica a la madre en el otro campo, con el RP como está escrito allá");
+  const fPadre = rev.filas.find(f => f.rp === "X900" && f.relacion === "padre");
+  ok(fPadre && fPadre.estado === "en_otro_campo" && fPadre.propuesta.rp === "T777", "el padre cargado por nombre se resuelve al toro del otro campo");
+  const simV = vin.aplicar("triunfo", { simular: true });
+  const leerX = (rp, col) => dbT2.prepare(`SELECT ${col} v FROM animales WHERE rp=?`).get(rp).v;
+  ok(simV.simulado && simV.bien >= 2 && !leerX("X900", "madre_campo"), "simular no escribe");
+  const apl = vin.aplicar("triunfo", {});
+  ok(apl.bien >= 2 && leerX("X900", "madre_rp") === "Z777" && leerX("X900", "madre_campo") === "principal"
+    && leerX("X900", "padre_rp") === "T777" && leerX("X900", "padre_campo") === "principal", "arreglar deja el RP real y el campo donde vive cada uno");
+  const fam = vin.familiaFuera("triunfo", { madre_campo: "principal", madre_rp: "Z777", padre_campo: "principal", padre_rp: "T777" });
+  ok(fam.madre && fam.madre.campo === "principal" && fam.padre && fam.padre.rp === "T777", "la ficha trae la madre y el padre del otro campo");
+  const hf = vin.hijosFuera("principal", "Z777", null);
+  ok(hf.some(x => x.rp === "X900" && x.campo === "triunfo"), "desde la madre se ven los hijos que tiene en otros campos");
+  ok(!vin.revisar("triunfo", { fresco: true }).filas.some(f => f.rp === "X900"), "después de arreglar ya no figura como huérfano");
+  // Un RP escrito con un cero de más, dentro del mismo campo.
+  dbT2.prepare("INSERT INTO animales (rp, sexo, categoria, estado, fecha_nac, madre_rp) VALUES (?,?,?,?,?,?)").run("X902", "H", "TERNERA", "ACTIVO", "2026-08-03", "011");
+  // Una madre que no existe en ningún lado.
+  dbT2.prepare("INSERT INTO animales (rp, sexo, categoria, estado, fecha_nac, madre_rp) VALUES (?,?,?,?,?,?)").run("X901", "H", "TERNERA", "ACTIVO", "2026-08-02", "NOEXISTE99");
+  vin.olvidar();
+  const rev4 = vin.revisar("triunfo", { fresco: true });
+  const f902 = rev4.filas.find(f => f.rp === "X902");
+  ok(f902 && f902.estado === "corregir_rp" && f902.propuesta.rp === "11", "un RP con un cero de más se corrige contra el propio campo");
+  const huerfano = rev4.filas.find(f => f.rp === "X901");
+  ok(huerfano && huerfano.estado === "no_existe", "una madre que no existe en ningún campo queda marcada, no inventada");
+  vin.aplicar("triunfo", {});
+  ok(leerX("X901", "madre_campo") === null && leerX("X902", "madre_rp") === "11", "arreglar corrige el RP y no toca lo que no existe");
+  dbT2.prepare("DELETE FROM animales WHERE rp IN ('X900','X901','X902')").run();
+  db.prepare("DELETE FROM animales WHERE rp IN ('Z777','T777')").run();
+  vin.olvidar();
+
+  // ── Las estadísticas de la vaca cuentan los hijos de otros campos ──
+  db.prepare("INSERT INTO animales (rp, sexo, categoria, estado, fecha_nac) VALUES (?,?,?,?,?)").run("M900", "H", "VACA", "ACTIVO", "2018-08-01");
+  const idM900 = db.prepare("SELECT id FROM animales WHERE rp='M900'").get().id;
+  db.prepare("INSERT INTO pesadas (animal_id, fecha, peso, contexto) VALUES (?,?,?,?)").run(idM900, "2026-03-20", 480, "ADULTO");
+  db.prepare("INSERT INTO servicios (animal_id, temporada, tipo_servicio, toro_natural, fecha_ingreso_toro, resultado) VALUES (?,?,?,?,?,?)").run(idM900, "2024", "NATURAL", "HERCULES", "2024-12-01", "PREÑADA_TORO");
+  for (const [rp, fecha, pn, des] of [["H901", "2025-09-05", 32, 210], ["H902", "2026-08-20", 30, null]]) {
+    dbT2.prepare("INSERT INTO animales (rp, sexo, categoria, estado, fecha_nac, madre_rp, padre_rp) VALUES (?,?,?,?,?,?,?)").run(rp, "M", "TERNERO", "ACTIVO", fecha, "M900", "HERCULES");
+    const idh = dbT2.prepare("SELECT id FROM animales WHERE rp=?").get(rp).id;
+    dbT2.prepare("INSERT INTO pesadas (animal_id, fecha, peso, contexto) VALUES (?,?,?,?)").run(idh, fecha, pn, "NACIMIENTO");
+    if (des) dbT2.prepare("INSERT INTO pesadas (animal_id, fecha, peso, contexto) VALUES (?,?,?,?)").run(idh, "2026-04-01", des, "DESTETE");
+  }
+  vin.olvidar();
+  const sinCruce = plantelMod.plantel(db).filas.find(f => f.rp === "M900");
+  ok(sinCruce && sinCruce.partos === 0, "sin cruzar campos la vaca figura sin partos (el problema viejo)");
+  const mapaC = vin.mapaCriasFuera("principal", { fresco: true });
+  const cf = rp => mapaC.get(animalesMod.compacto(rp)) || [];
+  const conCruce = plantelMod.plantel(db, { criasFuera: cf }).filas.find(f => f.rp === "M900");
+  ok(conCruce.partos === 2 && conCruce.hijos_otros_campos === 2, "cruzando campos se le cuentan los dos partos");
+  ok(conCruce.estado === "CRIANDO" && conCruce.ternero === "H902" && conCruce.ternero_campo_nombre === "El Triunfo", "el estado y el ternero del año salen del hijo que está en El Triunfo");
+  ok(conCruce.destete_prom === 210 && conCruce.eficiencia > 0, "el destete y la eficiencia se calculan con esos hijos");
+  const fichaM = plantelMod.ficha(db, "M900", { criasFuera: cf });
+  ok(fichaM.campanas.length >= 2 && fichaM.campanas.every(c => !c.parto || c.campo_nombre === "El Triunfo"), "el historial de partos muestra en qué campo nació cada ternero");
+  // Un hijo cuya madre también existe en su propio campo no se le atribuye a la de acá.
+  const madreLocal = plantelMod.plantel(dbT2).filas[0].rp;
+  dbT2.prepare("INSERT INTO animales (rp, sexo, categoria, estado, fecha_nac, madre_rp) VALUES (?,?,?,?,?,?)").run("H903", "H", "TERNERA", "ACTIVO", "2026-08-25", madreLocal);
+  vin.olvidar();
+  const mapa2 = vin.mapaCriasFuera("principal", { fresco: true });
+  ok(!(mapa2.get(animalesMod.compacto(madreLocal)) || []).some(x => x.rp === "H903"), "un ternero cuya madre existe en su propio campo no se atribuye a la vaca homónima de otro campo");
+  // Los toros suman los hijos que tuvieron sirviendo afuera.
+  const mapaP = vin.mapaCriasFuera("principal", { relacion: "padre", fresco: true });
+  const hf2 = rp => mapaP.get(animalesMod.compacto(rp)) || [];
+  const torosCon = animalesMod.toros(db, { hijosFuera: hf2 }).filas.find(t => t.rp === "B332");
+  const torosSin = animalesMod.toros(db).filas.find(t => t.rp === "B332");
+  ok(torosCon.hijos >= torosSin.hijos, "el toro suma los hijos que tuvo en otros campos");
+  dbT2.prepare("DELETE FROM pesadas WHERE animal_id IN (SELECT id FROM animales WHERE rp IN ('H901','H902','H903'))").run();
+  dbT2.prepare("DELETE FROM animales WHERE rp IN ('H901','H902','H903')").run();
+  db.prepare("DELETE FROM servicios WHERE animal_id=?").run(idM900);
+  db.prepare("DELETE FROM pesadas WHERE animal_id=?").run(idM900);
+  db.prepare("DELETE FROM animales WHERE rp='M900'").run();
+  vin.olvidar();
+
+  // ── El mismo ternero cargado en dos campos (cargas viejas) ──
+  db.prepare("INSERT INTO animales (rp, sexo, categoria, estado, fecha_nac) VALUES (?,?,?,?,?)").run("B557", "H", "VACA", "ACTIVO", "2017-08-01");
+  const idB557 = db.prepare("SELECT id FROM animales WHERE rp='B557'").get().id;
+  db.prepare("INSERT INTO pesadas (animal_id, fecha, peso, contexto) VALUES (?,?,?,?)").run(idB557, "2026-03-20", 500, "ADULTO");
+  db.prepare("INSERT INTO animales (rp, sexo, categoria, estado, fecha_nac, madre_rp) VALUES (?,?,?,?,?,?)").run("HB557-21", "H", "TERNERA", "ACTIVO", "2021-10-11", "B557");
+  const idFantasma = db.prepare("SELECT id FROM animales WHERE rp='HB557-21'").get().id;
+  db.prepare("INSERT INTO pesadas (animal_id, fecha, peso, contexto) VALUES (?,?,?,?)").run(idFantasma, "2021-10-11", 23, "NACIMIENTO");
+  dbT2.prepare("INSERT INTO animales (rp, sexo, categoria, estado, fecha_nac, madre_rp) VALUES (?,?,?,?,?,?)").run("R29", "H", "VAQUILLONA", "ACTIVO", "2021-10-11", "B557");
+  const idReal = dbT2.prepare("SELECT id FROM animales WHERE rp='R29'").get().id;
+  dbT2.prepare("INSERT INTO pesadas (animal_id, fecha, peso, contexto) VALUES (?,?,?,?)").run(idReal, "2021-10-11", 22.55, "NACIMIENTO");
+  vin.olvidar();
+  const mapaD = vin.mapaCriasFuera("principal", { fresco: true });
+  const cfD = rp => mapaD.get(animalesMod.compacto(rp)) || [];
+  const b557 = plantelMod.plantel(db, { criasFuera: cfD }).filas.find(f => f.rp === "B557");
+  ok(b557.partos === 1 && b557.hijos_repetidos === 1, "el mismo ternero en dos campos cuenta como un solo parto");
+  const fB557 = plantelMod.ficha(db, "B557", { criasFuera: cfD });
+  ok(fB557.campanas[0].ternero === "R29" && fB557.campanas[0].campo_nombre === "El Triunfo", "queda el RP real del animal, no el armado con el RP de la madre");
+  const dup = vin.duplicados("principal", { fresco: true });
+  ok(dup.resumen.total === 1 && dup.pares[0].queda.rp === "R29" && /armado/.test(dup.pares[0].porque), "los detecta y dice cuál queda y por qué");
+  const uniSim = vin.unificar("principal", { simular: true });
+  ok(uniSim.simulado && uniSim.bien === 1 && db.prepare("SELECT estado FROM animales WHERE rp='HB557-21'").get().estado === "ACTIVO", "simular no cambia nada");
+  vin.unificar("principal", {});
+  ok(db.prepare("SELECT estado FROM animales WHERE rp='HB557-21'").get().estado === "DUPLICADO", "unificar marca el repetido, sin borrarlo");
+  ok(db.prepare("SELECT COUNT(*) n FROM notas_campo WHERE animal_rp='HB557-21'").get().n === 1, "queda anotado de quién es duplicado");
+  vin.olvidar();
+  ok(plantelMod.plantel(db, { criasFuera: rp => vin.mapaCriasFuera("principal", { fresco: true }).get(animalesMod.compacto(rp)) || [] }).filas.find(f => f.rp === "B557").partos === 1,
+    "después de unificar sigue contando un solo parto");
+  // Mellizos de distinto sexo no se confunden con un duplicado.
+  dbT2.prepare("INSERT INTO animales (rp, sexo, categoria, estado, fecha_nac, madre_rp) VALUES (?,?,?,?,?,?)").run("R30", "M", "TERNERO", "ACTIVO", "2021-10-11", "B557");
+  vin.olvidar();
+  ok(vin.duplicados("principal", { fresco: true }).resumen.total === 0, "un mellizo de distinto sexo no se toma por duplicado");
+  dbT2.prepare("DELETE FROM pesadas WHERE animal_id IN (SELECT id FROM animales WHERE rp IN ('R29','R30'))").run();
+  dbT2.prepare("DELETE FROM animales WHERE rp IN ('R29','R30')").run();
+  db.prepare("DELETE FROM pesadas WHERE animal_id IN (?,?)").run(idB557, idFantasma);
+  db.prepare("DELETE FROM animales WHERE rp IN ('B557','HB557-21')").run();
+  try { db.prepare("DELETE FROM notas_campo WHERE animal_rp='HB557-21'").run(); } catch (e) {}
+  vin.olvidar();
+
   const bot10 = botMod.crear({ plantelMod, animalesMod, destinosMod, exportarMod, relevarMod, guardarTablero: S.guardarTablero, CAMPOS: S.CAMPOS, empresas: S.empresasDe,
     cliente: clienteFalso([
       () => ({ content: [uso("t11", "campos", {})] }),
