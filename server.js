@@ -183,7 +183,7 @@ function crearTablas(db) {
 // Vive en bot.js. Acá sólo se crea con lo que necesita del servidor.
 // guardarTablero está definido más abajo; como es una declaración de función,
 // ya existe cuando se llega acá.
-const bot = botMod.crear({ plantelMod, animalesMod, destinosMod, exportarMod, relevarMod, adjuntosMod, finanzasMod, guardarTablero, registrarSalida, CAMPOS, empresas: empresasDe, vinculos: vinculosDe, criasFuera: criasFueraDe, hijosFuera: hijosFueraDe });
+const bot = botMod.crear({ plantelMod, animalesMod, destinosMod, exportarMod, relevarMod, adjuntosMod, finanzasMod, guardarTablero, registrarSalida, CAMPOS, getDB, empresas: empresasDe, vinculos: vinculosDe, criasFuera: criasFueraDe, hijosFuera: hijosFueraDe });
 const MODELO = bot.modelo;
 
 // ── TABLEROS QUE ARMA EL BOT ─────────────────────────────────────────────────
@@ -713,15 +713,18 @@ app.get("/adjuntos/:id/:nombre?", (req, res) => {
 
 // Diagnóstico de WhatsApp: a qué campo y con qué cuenta contesta cada número.
 //   /api/whatsapp?to=+5491133334444  → dice qué pasaría con un mensaje a ese número
+// Qué llegó realmente por el webhook, con el número tal cual lo manda Twilio.
+app.get("/api/whatsapp/ultimos", (req, res) => res.json({ recibidos: ULTIMOS_WA.length, mensajes: ULTIMOS_WA }));
+
 app.get("/api/whatsapp", (req, res) => {
-  const lista = numerosWhatsApp().map(n => ({ nombre: n.nombre, termina_en: n.numero.slice(-4), campo: n.campo,
+  const lista = numerosWhatsApp().map(n => ({ nombre: n.nombre, numero: "+" + n.numero, termina_en: n.numero.slice(-4), campo: n.campo,
     campo_nombre: (CAMPOS[n.campo] || {}).nombre, empresa: empresasDe().empresaDe(n.campo).nombre,
     cuenta_twilio: n.sid ? n.sid.slice(0, 6) + "…" + n.sid.slice(-4) : "FALTA" }));
   const out = { numeros: lista, permitidos: WA_PERMITIDOS.length ? WA_PERMITIDOS.length + " números autorizados" : "cualquiera puede escribir",
     por_remitente: WA_CAMPOS };
   if (req.query.to) {
     const n = numeroDe(req.query.to);
-    out.prueba = { escriben_a: req.query.to, reconocido: !n.desconocido, numero: n.nombre, campo: n.campo,
+    out.prueba = { escriben_a: req.query.to, normalizado: "+" + soloDigitos(req.query.to), reconocido: !n.desconocido, numero: n.nombre, campo: n.campo,
       campo_nombre: (CAMPOS[n.campo] || {}).nombre, empresa: empresasDe().empresaDe(n.campo).nombre,
       cuenta_twilio: n.sid ? n.sid.slice(0, 6) + "…" + n.sid.slice(-4) : "FALTA" };
   }
@@ -782,10 +785,22 @@ function numerosWhatsApp() {
   return lista;
 }
 // A qué número le escribieron: dice la cuenta con la que responder y el campo.
+const cola = (n, cuantos = 8) => String(n || "").replace(/\D/g, "").slice(-cuantos);
+
+// Los últimos mensajes que llegaron por WhatsApp, tal como los manda Twilio.
+// Sirve para ver por qué un número no se reconoce, sin tener que adivinar.
+const ULTIMOS_WA = [];
+function anotarWhatsApp(entrada) {
+  ULTIMOS_WA.unshift({ cuando: new Date().toISOString(), ...entrada });
+  if (ULTIMOS_WA.length > 30) ULTIMOS_WA.length = 30;
+}
 function numeroDe(to) {
   const d = soloDigitos(to);
   const lista = numerosWhatsApp();
-  const hallado = lista.find(n => n.numero && d && (n.numero === d || d.endsWith(n.numero) || n.numero.endsWith(d)));
+  // Primero exacto; después por los últimos 8 dígitos, que es lo que no cambia
+  // aunque el prefijo del país o el 9 de celular estén escritos distinto.
+  const hallado = lista.find(n => n.numero && d && (n.numero === d || d.endsWith(n.numero) || n.numero.endsWith(d)))
+    || lista.find(n => n.numero && d && cola(n.numero).length >= 7 && cola(n.numero) === cola(d));
   if (hallado) return hallado;
   // Con un solo número configurado, es ése. Con varios, no se adivina: contestar
   // por el campo equivocado es peor que decir que el número no está configurado.
@@ -854,16 +869,19 @@ app.post("/webhook", async (req, res) => {
   }
   // El número al que escribieron decide la cuenta y el campo; WHATSAPP_CAMPOS (por remitente) manda si está.
   const cuenta = numeroDe(a);
+  anotarWhatsApp({ to: a, to_digitos: soloDigitos(a), from: de, texto: texto.slice(0, 60), medios: nMedia,
+    resuelto: cuenta.desconocido ? null : cuenta.nombre, campo: cuenta.desconocido ? null : cuenta.campo,
+    configurados: numerosWhatsApp().map(n => ({ nombre: n.nombre, numero: n.numero })) });
   const campoKey = CAMPOS[WA_CAMPOS[numero]] ? WA_CAMPOS[numero] : cuenta.campo;
   const db = getDB(campoKey);
   const twilio = clienteTwilio(cuenta);
   const emp = empresasDe().empresaDe(campoKey);
   console.log(`whatsapp: ${de} → ${a} (${cuenta.nombre}) · campo ${campoKey} · empresa ${emp.nombre}`);
   if (cuenta.desconocido) {
-    const conocidos = numerosWhatsApp().map(n => `${n.nombre} (…${n.numero.slice(-4)} → ${(CAMPOS[n.campo] || {}).nombre || n.campo})`).join(", ");
-    console.error(`whatsapp: el número ${a} no está configurado. Configurados: ${conocidos}`);
+    const conocidos = numerosWhatsApp().map(n => `${n.nombre}: +${n.numero} → ${(CAMPOS[n.campo] || {}).nombre || n.campo}`).join(" · ");
+    console.error(`whatsapp: el número +${soloDigitos(a)} (tal como llegó: ${a}) no está configurado. Configurados: ${conocidos}`);
     if (twilio) { try { await twilio.messages.create({ from: a, to: de,
-      body: `Este número (…${soloDigitos(a).slice(-4)}) todavía no está asignado a un campo, así que no sé de cuál contestarte. Falta agregarlo en el sistema. Configurados hoy: ${conocidos}.` }); } catch (x) {} }
+      body: `Le escribiste al +${soloDigitos(a)}, y ese número todavía no está asignado a ningún campo.\n\nLos que sí están:\n${numerosWhatsApp().map(n => `· +${n.numero} → ${(CAMPOS[n.campo] || {}).nombre || n.campo}`).join("\n")}\n\nHay que agregarlo en las variables del sistema.` }); } catch (x) {} }
     return;
   }
 

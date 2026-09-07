@@ -85,6 +85,7 @@ const HERRAMIENTAS = [
         desc: { type: "boolean", description: "De mayor a menor." },
         limite: { type: "integer", description: "Máximo de filas (por defecto 120)." },
         solo_resumen: { type: "boolean", description: "true: sólo el resumen, sin filas." },
+        campo: { type: "string", description: "Otro campo de la empresa (clave o nombre). Por defecto, el campo en el que estás." },
         incluir_destinados: { type: "boolean", description: "true: incluir también a las que tienen destino de salida marcado (por defecto no cuentan como plantel)." }
       }
     }
@@ -96,7 +97,8 @@ const HERRAMIENTAS = [
       "si es vientre, su historial campaña por campaña (servicio, tacto, parto, bloque, ternero) con los " +
       "tactos corregidos por la fecha real de nacimiento. Acepta el RP como se escribe en la manga: " +
       "'011', '11', 'b 332' y también la caravana electrónica.",
-    input_schema: { type: "object", properties: { rp: { type: "string" } }, required: ["rp"] }
+    input_schema: { type: "object", properties: { rp: { type: "string" },
+      campo: { type: "string", description: "Buscar la ficha en otro campo de la empresa." } }, required: ["rp"] }
   },
   {
     name: "toros",
@@ -107,14 +109,16 @@ const HERRAMIENTAS = [
     input_schema: { type: "object", properties: {
       estado: { type: "string", description: "ACTIVO (default) o TODOS." },
       anio: { type: "string", description: "Año para contar los hijos del año. Por defecto el actual." },
-      incluir_destinados: { type: "boolean", description: "true: también los toros con destino de salida marcado." } } }
+      incluir_destinados: { type: "boolean", description: "true: también los toros con destino de salida marcado." },
+      campo: { type: "string", description: "Otro campo de la empresa." } } }
   },
   {
     name: "buscar",
     description: "Encuentra animales por RP (tolerando ceros y espacios), caravana, HBA, madre, padre o palabras " +
       "de sus notas. Usalo cuando un RP no aparece con SQL exacto, cuando puede haber más de un animal " +
       "con el mismo número, o para 'los hijos de Hércules'.",
-    input_schema: { type: "object", properties: { q: { type: "string" } }, required: ["q"] }
+    input_schema: { type: "object", properties: { q: { type: "string" },
+      campo: { type: "string", description: "Buscar en otro campo de la empresa." } }, required: ["q"] }
   },
   {
     name: "consultar",
@@ -125,7 +129,8 @@ const HERRAMIENTAS = [
       type: "object",
       properties: {
         sql: { type: "string", description: "Un SELECT. Sólo lectura." },
-        porque: { type: "string", description: "Qué estás tratando de averiguar con esto." }
+        porque: { type: "string", description: "Qué estás tratando de averiguar con esto." },
+        campo: { type: "string", description: "Consultar la base de otro campo de la empresa." }
       },
       required: ["sql"]
     }
@@ -140,7 +145,8 @@ const HERRAMIENTAS = [
       properties: {
         sql: { type: "string", description: "INSERT, UPDATE o DELETE." },
         params: { type: "array", items: {}, description: "Valores para los ? del SQL." },
-        que: { type: "string", description: "Qué estás cambiando, en una línea." }
+        que: { type: "string", description: "Qué estás cambiando, en una línea." },
+        campo: { type: "string", description: "Escribir en la base de otro campo de la empresa." }
       },
       required: ["sql", "que"]
     }
@@ -166,6 +172,7 @@ const HERRAMIENTAS = [
         contexto: { type: "string", description: "pesadas: NACIMIENTO, DESTETE, ADULTO, CONTROL, RECRIA, CORRAL…" },
         producto: { type: "string" }, dosis: { type: "string" }, motivo: { type: "string" },
         tipo_medicion: { type: "string", description: "mediciones: CC, CE, ALTURA, FRAME…" },
+        campo: { type: "string", description: "Cargar en otro campo de la empresa (clave o nombre)." },
         simular: { type: "boolean", description: "true: sólo mostrar qué haría." }
       },
       required: ["tipo"]
@@ -225,6 +232,7 @@ const HERRAMIENTAS = [
         nota: { type: "string" },
         temporada: { type: "string", description: "Año. Por defecto el actual." },
         accion: { type: "string", enum: ["marcar", "sacar", "salida"], description: "marcar (default) · sacar: le quita el destino y vuelve al plantel · salida: ya se fue del campo. Con precio, la venta se manda al sistema financiero." },
+        campo: { type: "string", description: "Otro campo de la empresa." },
         fecha: { type: "string" }, precio: { type: "number", description: "salida: precio por cabeza." },
         precio_total: { type: "number", description: "salida: precio total de todos juntos (alternativa a precio)." },
         comprador: { type: "string", description: "salida: a quién se vendió." }, kg: { type: "number", description: "salida: kilos vendidos en total, si se pesaron." }
@@ -385,8 +393,27 @@ function crear(deps) {
   const finanzasMod = deps.finanzasMod || require("./finanzas.js");
   const empresasDe = typeof deps.empresas === "function" ? deps.empresas : () => deps.empresas || null;
   const vinculosDe = typeof deps.vinculos === "function" ? deps.vinculos : () => deps.vinculos || null;
+
+  // Un campo pedido por su clave ("el_triunfo") o por su nombre ("El Triunfo"),
+  // siempre dentro de la empresa del campo en el que se está parado.
+  function resolverCampo(pedido, campoActual) {
+    const t = String(pedido || "").trim();
+    if (!t) return null;
+    const em = empresasDe();
+    const permitidos = em ? em.empresaDe(campoActual).campos : Object.keys(CAMPOS).map(k => ({ key: k, nombre: (CAMPOS[k] || {}).nombre }));
+    const n = t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+    const hallado = permitidos.find(c => c.key.toLowerCase() === t.toLowerCase())
+      || permitidos.find(c => String(c.key).toLowerCase().replace(/[^a-z0-9]/g, "") === n)
+      || permitidos.find(c => String(c.nombre || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "") === n);
+    if (!hallado) throw new Error(`No puedo trabajar en "${pedido}". Los campos de esta empresa son: ${permitidos.map(c => `${c.nombre} (${c.key})`).join(", ")}`);
+    return hallado.key;
+  }
   const CAMPOS = deps.CAMPOS || {};
+  // Dos modelos: el bueno para pensar, uno barato para lo directo. El ruteo
+  // decide cuál se usa en cada mensaje; con MODELO_RUTEO se puede fijar.
   const modelo = deps.modelo || process.env.MODELO || "claude-opus-5";
+  const modeloSimple = deps.modeloSimple || process.env.MODELO_SIMPLE || "claude-haiku-4-5";
+  const ruteo = String(deps.ruteo || process.env.MODELO_RUTEO || "auto").toLowerCase();
   // "medium" alcanza para casi todo lo del campo y sale bastante menos que "high".
   // Se sube con la variable ESFUERZO cuando hace falta exprimirlo (xhigh, max).
   const esfuerzo = deps.esfuerzo || process.env.ESFUERZO || "medium";
@@ -468,7 +495,9 @@ QUÉ HERRAMIENTA PARA QUÉ:
 · finanzas_registrar: cargar un gasto o un ingreso ahí. Las ventas de hacienda NO: ésas van por destinar salida con el precio, y se mandan solas.
 
 ATENDÉS LAS DOS COSAS: lo del campo (animales, pesadas, sanidad aplicada, nacimientos) va a la base ganadera; lo de plata (cuánto se gastó, qué se compró, cuánto entró) va al financiero de esta empresa. Un mismo hecho puede ser las dos: "vacuné 80 vacas con ivermectina que compré a 300 dólares" es una aplicación de sanidad (relevar) y un gasto (finanzas_registrar). Hacé las dos y contá las dos. Si el financiero no está enlazado, decilo y cargá igual lo del campo.
-· campos: la empresa entera, campo por campo, cuando preguntan por el total o comparan campos. Vos estás parado en un campo: plantel, ficha y consultar miran sólo éste.
+· campos: la empresa entera, campo por campo, cuando preguntan por el total o comparan campos.
+
+EN QUÉ CAMPO TRABAJÁS: estás parado en uno, y ahí van las consultas y las cargas por defecto. Pero la empresa puede tener varios, y casi todas las herramientas aceptan 'campo' para trabajar en otro: "cargá estas pesadas en El Triunfo", "¿cuántas vacas hay en Campito Videla?". Poné la clave o el nombre del campo. Si te nombran un campo que no es de esta empresa, decilo en vez de usar el que tenés. Cuando no está claro en cuál cargar y la empresa tiene más de uno, preguntá antes de escribir.
 · trasladar: mover animales a otro campo de la empresa. Simulá primero.
 · vinculos: cuando una madre o un padre no aparecen, antes de decir que no existen fijate si están en otro campo de la empresa. Con accion=buscar encontrás un RP en todos los campos; con revisar ves todos los huérfanos del campo; con arreglar los dejás vinculados.
 
@@ -531,6 +560,11 @@ ${cal.cortes ? `Bloques de la parición en curso: cabeza hasta ${cal.cortes.CABE
   // ── herramientas: qué hace cada una ────────────────────────────────────
   async function ejecutar(db, nombre, input, ctx) {
     const usuario = ctx.usuario || null;
+    // "cargá esto en El Triunfo": la herramienta trabaja sobre ese campo.
+    if (input && input.campo && deps.getDB) {
+      const k = resolverCampo(input.campo, ctx.campoKey);
+      if (k && k !== ctx.campoKey) { db = deps.getDB(k); ctx = { ...ctx, campoKey: k }; }
+    }
     switch (nombre) {
       case "plantel": {
         const p = plantelMod.plantel(db, { anio: input.anio, incluirDestinados: !!input.incluir_destinados, criasFuera: deps.criasFuera ? deps.criasFuera(ctx.campoKey) : undefined });
@@ -708,6 +742,44 @@ ${cal.cortes ? `Bloques de la parición en curso: cabeza hasta ${cal.cortes.CABE
    * de la API). Si viene canal+usuario y no viene historia, la historia sale
    * de la base. `onEvento` recibe {tipo: "vuelta"|"texto"|"pensando"|"paso"|"fin", ...}.
    */
+  // ── QUÉ MODELO USAR ────────────────────────────────────────────────────────
+  //
+  // Lo que se pregunta en el campo se parte en dos:
+  //
+  //   directo   "cuánto pesó el 148", "cargá estas pesadas", "ficha de la 23"
+  //             Es buscar un dato o escribirlo. Un modelo chico lo hace igual
+  //             de bien y sale cinco veces menos.
+  //   pensado   "qué vacas conviene descartar", "por qué bajó el destete",
+  //             "hay algo mal cargado", "armame un tablero"
+  //             Hay que cruzar datos y sacar conclusiones: ahí va el bueno.
+  //
+  // Ante la duda, el bueno: una respuesta pobre sale más cara que los centavos
+  // que se ahorran. Y si el chico no llega a una conclusión, se reintenta con
+  // el bueno automáticamente.
+  const PENSADO = /\b(por qu[eé]|porqu[eé]|conviene|convendr|analiz|compar|eval[uú]|recomend|sugier|decid|elegir|descart|mal cargad|inconsisten|revis[aá]|audit|tablero|informe|resum[ií]|explic|estrategia|proyect|estim|tendencia|evoluci|rendimiento|eficien|ranking|mejor(es)? |peor(es)? |cu[aá]l(es)? conv|qu[eé] hago|qu[eé] harías|opini|pensá|razon|c[oó]mo vien|c[oó]mo va|c[oó]mo est|qu[eé] tal|qu[eé] pas[oó] con)/i;
+  const DIRECTO = /^(\s*(cu[aá]nto|cu[aá]ntos|cu[aá]ntas|qui[eé]n|d[oó]nde|cu[aá]ndo|qu[eé] edad|qu[eé] peso|pes[oó]|ficha|dame la ficha|mostrame|list[aá]|carg[aá]|anot[aá]|agreg[aá]|sum[aá]|pon[eé]|marc[aá]|naci[oó]|vendi|sali[oó]))/i;
+  const LINEAS_DATOS = /^\s*[A-Za-z0-9\-\.]+[\s,;\t]+[\d,\.]+\s*$/;
+
+  const piensaAdaptativo = m => /^claude-(opus-5|sonnet-5|fable-5)/.test(String(m || ""));
+
+  function elegirModelo(texto, opciones = {}) {
+    if (ruteo === "grande" || ruteo === "opus") return { modelo, porque: "MODELO_RUTEO fijo en el grande" };
+    if (ruteo === "simple" || ruteo === "barato") return { modelo: modeloSimple, porque: "MODELO_RUTEO fijo en el simple" };
+    const t = String(texto || "").trim();
+    // Fotos y PDF: leer una libreta escrita a mano no es para el chico.
+    if (opciones.conAdjuntos) return { modelo, porque: "hay archivos para leer" };
+    if (!t) return { modelo, porque: "sin texto" };
+    // Una lista de "RP peso" es carga pura, por larga que sea.
+    const lineas = t.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+    if (lineas.length >= 2 && lineas.filter(l => LINEAS_DATOS.test(l)).length >= lineas.length * 0.7)
+      return { modelo: modeloSimple, porque: "es una lista de datos para cargar" };
+    if (PENSADO.test(t)) return { modelo, porque: "pide analizar o decidir" };
+    if (t.length > 240) return { modelo, porque: "la pregunta es larga" };
+    if (DIRECTO.test(t)) return { modelo: modeloSimple, porque: "es un dato directo o una carga" };
+    if (t.length <= 60) return { modelo: modeloSimple, porque: "es una pregunta corta" };
+    return { modelo, porque: "por las dudas, el bueno" };
+  }
+
   async function conversar(db, campoNombre, mensajes, opciones = {}) {
     const ctx = { campoKey: opciones.campoKey, campoNombre, soloLectura: opciones.soloLectura, usuario: opciones.usuario };
     const emitir = e => { try { opciones.onEvento && opciones.onEvento(e); } catch (x) {} };
@@ -723,16 +795,20 @@ ${cal.cortes ? `Bloques de la parición en curso: cabeza hasta ${cal.cortes.CABE
       { type: "text", text: parteEstable(db, campoNombre), cache_control: { type: "ephemeral" } },
       { type: "text", text: parteVolatil(db) }
     ];
+    // El modelo de este mensaje. `opciones.modelo` lo fuerza (lo usa el reintento).
+    const elegido = opciones.modelo ? { modelo: opciones.modelo, porque: opciones.porqueModelo || "pedido" }
+      : elegirModelo(textoUsuario, { conAdjuntos: Array.isArray((ultimoUsuario || {}).content) && ultimoUsuario.content.some(x => x.type === "image" || x.type === "document") });
+    const modeloUsado = elegido.modelo;
+    emitir({ tipo: "modelo", modelo: modeloUsado, porque: elegido.porque });
     let respuesta = "", motivo = null;
 
     for (let vuelta = 0; vuelta < MAX_VUELTAS; vuelta++) {
       const ultima = vuelta === MAX_VUELTAS - 1;
       emitir({ tipo: "vuelta", n: vuelta + 1 });
       const stream = cliente.messages.stream({
-        model: modelo,
+        model: modeloUsado,
         max_tokens: 16000,
-        thinking: { type: "adaptive", display: "summarized" },
-        output_config: { effort: esfuerzo },
+        ...(piensaAdaptativo(modeloUsado) ? { thinking: { type: "adaptive", display: "summarized" }, output_config: { effort: esfuerzo } } : {}),
         system: ultima
           ? [...system, { type: "text", text: "SE TE ACABÓ EL TIEMPO DE CONSULTAR. Respondé ahora con lo que averiguaste. Si te falta algo, decí qué encontraste y qué te falta." }]
           : system,
@@ -792,22 +868,37 @@ ${cal.cortes ? `Bloques de la parición en curso: cabeza hasta ${cal.cortes.CABE
       guardarTurno(db, opciones.canal, opciones.usuario, "user", textoUsuario);
       guardarTurno(db, opciones.canal, opciones.usuario, "assistant", respuesta);
     }
-    const usd = costoUsd(uso, modelo);
+    const usd = costoUsd(uso, modeloUsado);
     try {
       db.prepare(`INSERT INTO uso_bot (fecha, modelo, canal, usuario, entrada, salida, cache_lectura, cache_escritura, vueltas, segundos, usd)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(hoyIso(), modelo, opciones.canal || "web", opciones.usuario || null,
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(hoyIso(), modeloUsado, opciones.canal || "web", opciones.usuario || null,
         uso.input, uso.output, uso.cache_read, uso.cache_creation, pasos.length, Math.round((Date.now() - t0) / 100) / 10, usd);
     } catch (e) {}
     uso.usd = usd;
-    emitir({ tipo: "fin", respuesta, pasos, uso });
-    return { respuesta, pasos, uso, modelo, motivo };
+    emitir({ tipo: "fin", respuesta, pasos, uso, modelo: modeloUsado });
+    return { respuesta, pasos, uso, modelo: modeloUsado, porque_modelo: elegido.porque, motivo };
   }
 
-  /** Un mensaje nuevo con la historia sacada de la base. */
+  /**
+   * Un mensaje nuevo con la historia sacada de la base. Si contestó el modelo
+   * chico y no llegó a una conclusión, se rehace con el bueno: gastar dos veces
+   * en una de cada tantas sale más barato que usar el bueno siempre.
+   */
   async function responder(db, campoNombre, texto, opciones = {}) {
     const previos = Array.isArray(opciones.historia) ? opciones.historia
       : historial(db, opciones.canal, opciones.usuario, { horas: opciones.canal === "whatsapp" ? 48 : null });
-    return conversar(db, campoNombre, [...previos, { role: "user", content: texto }], opciones);
+    const mensajes = [...previos, { role: "user", content: texto }];
+    const r = await conversar(db, campoNombre, mensajes, opciones);
+    // Si ya escribió en la base, no se rehace: se cargaría todo dos veces.
+    const escribio = (r.pasos || []).some(p => p.tipo === "escritura");
+    const seQuedoCorto = r.modelo !== modelo && r.motivo !== "refusal" && !escribio && (
+      !String(r.respuesta || "").trim() ||
+      /Revisé la base \d+ veces pero no llegué/.test(r.respuesta) ||
+      (r.pasos.length === 0 && /\bno (puedo|pude|sé|encuentro)\b/i.test(r.respuesta)));
+    if (!seQuedoCorto || ruteo !== "auto") return r;
+    const r2 = await conversar(db, campoNombre, mensajes, { ...opciones, modelo, porqueModelo: "el modelo simple no llegó: se rehace con el bueno" });
+    return { ...r2, reintento: true, uso: { input: r.uso.input + r2.uso.input, output: r.uso.output + r2.uso.output,
+      cache_read: r.uso.cache_read + r2.uso.cache_read, cache_creation: r.uso.cache_creation + r2.uso.cache_creation, usd: (r.uso.usd || 0) + (r2.uso.usd || 0) } };
   }
 
   /** Cuánto se gastó: hoy, este mes, y el detalle de los últimos días. */
@@ -818,21 +909,30 @@ ${cal.cortes ? `Bloques de la parición en curso: cabeza hasta ${cal.cortes.CABE
     const filas = q(`SELECT fecha, COUNT(*) consultas, SUM(entrada) entrada, SUM(salida) salida, SUM(cache_lectura) cache_lectura,
       SUM(cache_escritura) cache_escritura, SUM(usd) usd FROM uso_bot WHERE fecha BETWEEN ? AND ? GROUP BY fecha ORDER BY fecha DESC`, desde, hasta);
     const porCanal = q(`SELECT canal, COUNT(*) consultas, SUM(usd) usd FROM uso_bot WHERE fecha BETWEEN ? AND ? GROUP BY canal ORDER BY usd DESC`, desde, hasta);
+    const porModelo = q(`SELECT modelo, COUNT(*) consultas, SUM(entrada) entrada, SUM(salida) salida,
+      SUM(cache_lectura) cache_lectura, SUM(cache_escritura) cache_escritura, SUM(usd) usd
+      FROM uso_bot WHERE fecha BETWEEN ? AND ? GROUP BY modelo ORDER BY usd DESC`, desde, hasta);
     const suma = k => filas.reduce((s, f) => s + (Number(f[k]) || 0), 0);
     const hoy = filas.find(f => f.fecha === hoyIso()) || {};
     const mes = filas.filter(f => f.fecha.startsWith(hoyIso().slice(0, 7)));
     const r2 = n => Math.round((n || 0) * 100) / 100;
-    return { modelo, desde, hasta,
+    return { modelo, modelo_simple: modeloSimple, ruteo, desde, hasta,
       hoy: { consultas: hoy.consultas || 0, usd: r2(hoy.usd) },
       mes: { consultas: mes.reduce((s, f) => s + f.consultas, 0), usd: r2(mes.reduce((s, f) => s + (f.usd || 0), 0)) },
       periodo: { consultas: suma("consultas"), usd: r2(suma("usd")), entrada: suma("entrada"), salida: suma("salida"),
         cache_lectura: suma("cache_lectura"), cache_escritura: suma("cache_escritura"),
         promedio_por_consulta: suma("consultas") ? Math.round(suma("usd") / suma("consultas") * 10000) / 10000 : 0,
         ahorro_cache: r2(suma("cache_lectura") / 1e6 * ((PRECIOS[modelo] || PRECIOS["claude-opus-5"])[0] - (PRECIOS[modelo] || PRECIOS["claude-opus-5"])[2])) },
-      por_dia: filas.map(f => ({ ...f, usd: r2(f.usd) })), por_canal: porCanal.map(f => ({ ...f, usd: r2(f.usd) })) };
+      por_dia: filas.map(f => ({ ...f, usd: r2(f.usd) })), por_canal: porCanal.map(f => ({ ...f, usd: r2(f.usd) })),
+      por_modelo: porModelo.map(f => ({ ...f, usd: r2(f.usd),
+        promedio: f.consultas ? Math.round((f.usd || 0) / f.consultas * 10000) / 10000 : 0 })),
+      // Los mismos tokens, pero cobrados todos al modelo grande: así se ve en
+      // plata lo que ahorró el ruteo.
+      sin_ruteo: r2(porModelo.reduce((s, f) => s + costoUsd({ input: f.entrada, output: f.salida,
+        cache_read: f.cache_lectura, cache_creation: f.cache_escritura }, modelo), 0)) };
   }
 
-  return { HERRAMIENTAS, instrucciones, parteEstable, parteVolatil, conversar, responder, ejecutar, uso, costoUsd,
+  return { HERRAMIENTAS, instrucciones, parteEstable, parteVolatil, conversar, responder, ejecutar, uso, costoUsd, elegirModelo, modeloSimple, ruteo,
     exportarDesdeBot, relevarDesdeBot, recordar, memorias, historial, conversacion, guardarTurno, modelo, esfuerzo };
 }
 

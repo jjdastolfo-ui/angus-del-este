@@ -38,7 +38,9 @@ Abre en http://localhost:3001. Sin clave de API el tablero anda igual; sólo el 
 | `ANTHROPIC_API_KEY` | la clave de la API |
 | `DB_DIR` | dónde vive la base. En Railway: `/data`, con un volumen montado ahí |
 | `CAMPOS` | JSON con los campos (ver abajo) |
-| `MODELO` | opcional. Por defecto `claude-opus-5`. Para comparar: `claude-sonnet-5`, `claude-fable-5-1` |
+| `MODELO` | opcional. El modelo bueno, para lo que hay que pensar. Por defecto `claude-opus-5` |
+| `MODELO_SIMPLE` | opcional. El barato, para consultas directas y cargas. Por defecto `claude-haiku-4-5` |
+| `MODELO_RUTEO` | opcional. `auto` (por defecto) elige solo; `grande` manda todo al bueno; `simple`, todo al barato |
 | `ESFUERZO` | opcional. `medium` por defecto (alcanza para el uso diario). `low` para gastar lo mínimo, `high`/`xhigh`/`max` para preguntas difíciles |
 | `TWILIO_SID` / `TWILIO_TOKEN` (o `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN`) | sólo si se usa WhatsApp |
 | `RESPALDO_CLAVE` (o `CLAVE_BACKUP`) | una clave cualquiera; habilita `/api/respaldo?clave=...` para bajar una copia de la base |
@@ -251,16 +253,39 @@ el peso de la madre. El calendario del campo lo deduce de los propios registros.
 
 Cada respuesta guarda sus tokens y el costo estimado en la tabla `uso_bot`. En el
 tablero, pestaña **Archivos**, la primera caja muestra lo de hoy, lo del mes, el
-promedio por consulta y cuánto ahorró el caché, con el detalle por día y por canal
-(tablero / WhatsApp). También en `GET /api/uso?desde=&hasta=`.
+promedio por consulta y cuánto ahorró el caché, con el detalle por día, por canal
+(tablero / WhatsApp) y por modelo. También en `GET /api/uso?desde=&hasta=`.
 
-Para gastar menos, dos perillas que se cambian en Railway sin subir código:
+### Cada pregunta con el modelo que le corresponde
+
+La mayoría de lo que se le pregunta al bot en el campo no necesita un modelo
+caro: *"¿cuánto pesó la 148?"*, *"ficha de la 23"*, *"cargá estas pesadas"* son
+buscar un dato o escribirlo. Eso va a **Haiku**, que sale unas cinco veces menos.
+Lo que hay que pensar —*"¿qué vacas conviene descartar?"*, *"¿por qué bajó el
+destete?"*, *"revisá si hay algo mal cargado"*, un tablero, un informe— va a
+**Opus**. También van a Opus las fotos y los PDF: leer una libreta escrita a
+mano no es tarea para el chico.
+
+El ruteo mira el mensaje: si pide analizar, comparar, decidir o explicar, va al
+bueno; si es corto y directo, o es una lista de `RP peso` para cargar, va al
+barato; ante la duda, el bueno. Y si el barato se queda sin respuesta, la
+pregunta se rehace sola con Opus (salvo que ya haya escrito en la base: eso no
+se repite, para no cargar dos veces).
+
+En el tablero se ve el gasto abierto por modelo y cuánto ahorró el ruteo contra
+haber usado Opus para todo. Debajo de cada respuesta del chat dice qué modelo la
+contestó.
+
+Si algo no convence, se fija con `MODELO_RUTEO=grande` (todo a Opus) o
+`MODELO_RUTEO=simple` (todo a Haiku), sin subir código.
+
+Las otras perillas, para el modelo bueno:
 
 | Configuración | Costo relativo | Cuándo |
 |---|---|---|
-| `MODELO=claude-opus-5` + `ESFUERZO=high` | 100% | preguntas difíciles, auditorías de datos |
-| `MODELO=claude-opus-5` + `ESFUERZO=medium` (por defecto) | ~50% | el uso diario |
-| `MODELO=claude-opus-5` + `ESFUERZO=low` | ~30% | consultas simples, mucho volumen |
+| `ESFUERZO=high` | 100% | preguntas difíciles, auditorías de datos |
+| `ESFUERZO=medium` (por defecto) | ~50% | el uso diario |
+| `ESFUERZO=low` | ~30% | consultas simples, mucho volumen |
 | `MODELO=claude-sonnet-5` + `ESFUERZO=high` | ~40% | alternativa: modelo más barato pensando a fondo |
 
 Después de cambiar, `npm run evaluar` mide si la calidad se mantuvo.
@@ -407,6 +432,16 @@ campo va a la base del campo; lo de plata, al financiero de esa empresa
 (herramientas `finanzas` para leer y `finanzas_registrar` para cargar un gasto o un
 ingreso; las ventas de hacienda van con `destinar salida` y se mandan solas). Todos
 los números apuntan al mismo webhook: `https://TU-APP/webhook`.
+
+Un número atiende a una empresa: entra por uno de sus campos y desde ahí puede
+trabajar en los demás. Al bot se le dice el campo por su nombre ("cargá estas
+pesadas en El Triunfo", "¿cuántas vacas hay en Campito Videla?"); si nombran un
+campo de otra empresa, lo rechaza.
+
+El número se compara por los últimos 8 dígitos, así que da igual cómo esté
+escrito: `+598098610238` (con el 0 nacional) y `+59898610238` (como lo manda
+Twilio) son el mismo teléfono. Igual conviene guardarlo en formato internacional,
+sin el 0: `+59898610238`.
 
 Para ver a qué campo contesta cada número, sin mandar mensajes:
 
