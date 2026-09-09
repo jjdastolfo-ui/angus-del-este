@@ -10,10 +10,14 @@
 // Todo tiene dos pasos: `simular: true` muestra qué haría; sin eso, lo hace.
 // ─────────────────────────────────────────────────────────────────────────────
 const animalesMod = require("./animales.js");
+const plantelMod = require("./plantel.js");
 const xlsx = require("./xlsx.js");
+const { compacto } = animalesMod;
+const { GESTACION, origenPreñez } = plantelMod;
 
 const hoyIso = () => new Date().toISOString().slice(0, 10);
 const dias = (a, b) => (a && b) ? Math.round((new Date(b) - new Date(a)) / 86400000) : null;
+const sumar = (f, n) => { const d = new Date(f); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
 const r1 = n => Math.round(n * 10) / 10;
 
 // ── ENTENDER LO QUE VIENE ────────────────────────────────────────────────────
@@ -129,7 +133,7 @@ function sanidad(db, { rps, lote_id, todos, fecha, producto, dosis, motivo, simu
     for (const a of ids) {
       const r = { rp: a.rp, ok: true, avisos: [] };
       out.push(r);
-      if (ya.get(a.id, fe, producto)) { r.ok = false; r.error = "Ya tenía ese producto ese día"; continue; }
+      if (ya.get(a.id, fe, producto)) { r.ok = false; r.ya_estaba = true; r.rp_existente = a.rp; r.error = "ya estaba: tenía ese producto ese día"; continue; }
       if (!simular) { ins.run(a.id, fe, String(producto).trim(), dosis || null, motivo || null); r.hecho = true; }
     }
   };
@@ -152,6 +156,67 @@ function rpProvisorio(db, control, color) {
   throw new Error(`No pude armar un RP provisorio para la control ${control}`);
 }
 
+// ── ¿ESTE PARTO YA ESTÁ CARGADO? ─────────────────────────────────────────────
+//
+// El mismo nacimiento anotado dos veces —en la libreta y después dictado al
+// bot— creaba dos animales, y encima con RP distintos cuando venía por caravana
+// control (el provisorio se corre solo para no pisar al que ya está). Así que
+// se busca antes de escribir: la misma madre pariendo a pocos días es el mismo
+// ternero. Dos de distinto sexo sí pasan: son mellizos de verdad.
+const VENTANA_MISMO_PARTO = 5;
+const OTRA_TEMPORADA = 120;   // días: más lejos que esto, el servicio es de otro año
+
+function yaCargado(db, { madre, fecha, sexo, control, color }) {
+  const cerca = a => a.fecha_nac && Math.abs(dias(a.fecha_nac, fecha)) <= VENTANA_MISMO_PARTO;
+  const igualSexo = a => { const x = String(a.sexo || "").toUpperCase().slice(0, 1); return !x || !sexo || x === sexo; };
+  const cols = "rp, fecha_nac, sexo, caravana_control, caravana_color, rp_provisorio";
+  if (madre) {
+    const hermanos = db.prepare(`SELECT ${cols} FROM animales WHERE upper(COALESCE(madre_rp,''))=upper(?)`).all(madre.rp);
+    const igual = hermanos.find(a => cerca(a) && igualSexo(a));
+    if (igual) return { ...igual, porque: `misma madre (${madre.rp}) y misma fecha` };
+  }
+  if (control) {
+    const conControl = db.prepare(`SELECT ${cols} FROM animales WHERE caravana_control=?`).all(String(control).trim());
+    const igual = conControl.find(a => cerca(a) && igualSexo(a)
+      && (!color || !a.caravana_color || String(a.caravana_color).toUpperCase() === String(color).toUpperCase()));
+    if (igual) return { ...igual, porque: `misma caravana control ${control}${color ? " " + color : ""} y misma fecha` };
+  }
+  return null;
+}
+
+// ── EL PADRE SALE DE LA FECHA, NO DE LA MEMORIA ──────────────────────────────
+//
+// Un ternero nace 283 días después de concebido, así que con los servicios de
+// la madre cargados la fecha de nacimiento dice sola quién fue el padre: si cae
+// en la ventana de la IATF es el semen, si cae después es el toro del repaso.
+// Cuando no cierra, o cuando hay más de un candidato, no se inventa: se avisa.
+function padrePorFecha(db, madre, fechaNac) {
+  let serv = [];
+  try { serv = db.prepare("SELECT * FROM servicios WHERE animal_id=? ORDER BY COALESCE(fecha_iatf, fecha_ingreso_toro)").all(madre.id); }
+  catch (e) { return { candidatos: [], avisos: [], servicios: 0 }; }
+  const candidatos = [], avisos = [];
+  for (const sv of serv) {
+    if (sv.fecha_iatf) {
+      const o = origenPreñez(sv.fecha_iatf, fechaNac);
+      if (!o || Math.abs(o.dias) > OTRA_TEMPORADA) continue;
+      if (o.origen === "IATF" && sv.semen_iatf)
+        candidatos.push({ padre: sv.semen_iatf, porque: `la IATF del ${sv.fecha_iatf}: nació a ${Math.abs(o.dias)} día(s) de la fecha probable` });
+      else if (o.origen.startsWith("TORO") && sv.toro_natural)
+        candidatos.push({ padre: sv.toro_natural, porque: `${o.origen.toLowerCase()} del repaso, ${o.dias} días después de la FPP de la IATF del ${sv.fecha_iatf}` });
+      else if (o.aviso) avisos.push(o.aviso);
+      continue;
+    }
+    if (sv.toro_natural && sv.fecha_ingreso_toro) {
+      const concebido = sumar(fechaNac, -GESTACION);
+      const hasta = sv.fecha_salida_toro || sumar(sv.fecha_ingreso_toro, 90);
+      if (concebido >= sumar(sv.fecha_ingreso_toro, -7) && concebido <= sumar(hasta, 7))
+        candidatos.push({ padre: sv.toro_natural, porque: `el servicio natural con ${sv.toro_natural} (${sv.fecha_ingreso_toro} a ${hasta}): la concepción cae adentro` });
+    }
+  }
+  const unicos = [...new Map(candidatos.map(c => [compacto(c.padre), c])).values()];
+  return { candidatos: unicos, avisos, servicios: serv.length };
+}
+
 function nacimientos(db, { filas, simular, usuario }) {
   const out = [];
   const insA = db.prepare(`INSERT INTO animales (rp, chip, sexo, categoria, estado, fecha_nac, pelo, raza, madre_rp, padre_rp, notas, caravana_control, caravana_color, rp_provisorio)
@@ -166,18 +231,14 @@ function nacimientos(db, { filas, simular, usuario }) {
       const fe = fechaIso(f.fecha_nac || f.fecha);
       const sexo = sexoNorm(f.sexo);
       const pn = numero(f.peso_nac != null ? f.peso_nac : f.peso);
-      // Sin RP definitivo: queda con la caravana control y un RP provisorio.
-      let provisorio = false;
-      if (!r.rp && control) {
-        try { r.rp = rpProvisorio(db, control, color); provisorio = true; } catch (e) { r.error = e.message; continue; }
-        const otra = db.prepare("SELECT rp, caravana_color FROM animales WHERE rp_provisorio=1 AND caravana_control=? AND upper(COALESCE(estado,'ACTIVO'))='ACTIVO'").all(control);
-        if (otra.length) r.avisos.push(`ya hay ${otra.length} ternero(s) con control ${control} sin RP (${otra.map(o => o.rp + (o.caravana_color ? " " + o.caravana_color : "")).join(", ")}): al identificar, decí el color`);
-      }
-      if (!r.rp) { r.error = "Sin RP ni caravana control para el ternero"; continue; }
+      const mellizos = f.mellizos === true || f.mellizo === true || f.melliza === true;
+      // La fecha y el sexo van primero: sin eso no se puede saber si el parto
+      // ya está cargado, que es lo que hay que mirar antes de escribir nada.
       if (!fe) { r.error = "Sin fecha de nacimiento (o no la entiendo)"; continue; }
       if (fe > hoyIso()) { r.error = `La fecha ${fe} es futura`; continue; }
       if (!sexo) { r.error = "Sin sexo (M/H)"; continue; }
-      if (db.prepare("SELECT 1 FROM animales WHERE upper(rp)=upper(?)").get(r.rp)) { r.error = `Ya existe un animal con RP ${r.rp}`; continue; }
+
+      // La madre, que es de donde cuelga todo lo demás.
       let madre = null;
       if (r.madre) {
         madre = animalesMod.porRp(db, r.madre);
@@ -186,13 +247,54 @@ function nacimientos(db, { filas, simular, usuario }) {
           r.madre = madre.rp;
           if (!String(madre.sexo || "").toUpperCase().startsWith("H")) r.avisos.push(`${madre.rp} figura como macho`);
           const otra = db.prepare("SELECT rp, fecha_nac FROM animales WHERE upper(madre_rp)=upper(?) AND substr(fecha_nac,1,4)=?").get(madre.rp, fe.slice(0, 4));
-          if (otra && Math.abs(dias(otra.fecha_nac, fe)) > 3) r.avisos.push(`${madre.rp} ya tiene cría este año: ${otra.rp} (${otra.fecha_nac})`);
-          else if (otra) r.avisos.push(`${madre.rp} ya tiene ${otra.rp} nacido el mismo día: ¿mellizos?`);
+          if (otra && Math.abs(dias(otra.fecha_nac, fe)) > VENTANA_MISMO_PARTO) r.avisos.push(`${madre.rp} ya tiene cría este año: ${otra.rp} (${otra.fecha_nac})`);
         }
       } else r.avisos.push("sin madre");
+
+      // El mismo parto no se carga dos veces.
+      if (!mellizos) {
+        const repetido = yaCargado(db, { madre, fecha: fe, sexo, control, color });
+        if (repetido) {
+          r.ya_estaba = true; r.rp_existente = repetido.rp;
+          r.error = `ya estaba cargado como ${repetido.rp} (${repetido.fecha_nac}, ${repetido.porque})` +
+            `${repetido.rp_provisorio ? ", todavía sin RP definitivo" : ""}. Si de verdad son mellizos, cargalo con mellizos: true`;
+          continue;
+        }
+      }
+
+      // Recién ahora el RP: si venía por caravana control, el provisorio se
+      // corre para no pisar a otro, y eso es justo lo que duplicaba las cargas.
+      let provisorio = false;
+      if (!r.rp && control) {
+        try { r.rp = rpProvisorio(db, control, color); provisorio = true; } catch (e) { r.error = e.message; continue; }
+        const otra = db.prepare("SELECT rp, caravana_color FROM animales WHERE rp_provisorio=1 AND caravana_control=? AND upper(COALESCE(estado,'ACTIVO'))='ACTIVO'").all(control);
+        if (otra.length) r.avisos.push(`ya hay ${otra.length} ternero(s) con control ${control} sin RP (${otra.map(o => o.rp + (o.caravana_color ? " " + o.caravana_color : "")).join(", ")}): al identificar, decí el color`);
+      }
+      if (!r.rp) { r.error = "Sin RP ni caravana control para el ternero"; continue; }
+      if (db.prepare("SELECT 1 FROM animales WHERE upper(rp)=upper(?)").get(r.rp)) { r.error = `Ya existe un animal con RP ${r.rp}`; continue; }
       if (pn != null && (pn < 12 || pn > 70)) r.avisos.push(`peso al nacer raro: ${pn}`);
       if (pn == null) r.avisos.push("sin peso al nacer");
-      const padre = String(f.padre_rp || f.padre || "").trim() || null;
+
+      // El padre lo dice la fecha, cruzada con los servicios de la madre.
+      const dicho = String(f.padre_rp || f.padre || "").trim() || null;
+      let padre = dicho;
+      if (madre) {
+        const p = padrePorFecha(db, madre, fe);
+        p.avisos.forEach(a => r.avisos.push(a));
+        if (!dicho && p.candidatos.length === 1) {
+          padre = p.candidatos[0].padre;
+          r.padre_deducido = true;
+          r.avisos.push(`padre ${padre}, por ${p.candidatos[0].porque}`);
+        } else if (!dicho && p.candidatos.length > 1) {
+          r.avisos.push(`no puedo definir el padre: por la fecha da lo mismo ${p.candidatos.map(c => c.padre).join(" o ")}. Queda sin padre hasta que lo digas`);
+        } else if (!dicho && !p.servicios) {
+          r.avisos.push("sin padre: la madre no tiene servicios cargados, así que la fecha no lo puede decir");
+        } else if (!dicho) {
+          r.avisos.push(`sin padre: ninguno de los ${p.servicios} servicio(s) de ${madre.rp} explica un parto el ${fe}`);
+        } else if (p.candidatos.length && !p.candidatos.some(c => compacto(c.padre) === compacto(dicho))) {
+          r.avisos.push(`decís que el padre es ${dicho}, pero por la fecha corresponde ${p.candidatos[0].padre} (${p.candidatos[0].porque})`);
+        }
+      } else if (!dicho) r.avisos.push("sin padre: sin madre no hay servicios para deducirlo");
       r.ok = true; r.fecha_nac = fe; r.sexo = sexo; r.peso_nac = pn; r.padre = padre; r.provisorio = provisorio;
       if (!simular) {
         const id = insA.run(r.rp, f.chip || null, sexo, sexo === "M" ? "TERNERO" : "TERNERA", fe, peloNorm(f.pelo || f.pelaje),
@@ -410,7 +512,7 @@ function mapearEncabezados(encabezados, campos) {
 
 const CAMPOS_POR_TIPO = {
   pesadas: ["rp", "peso", "fecha", "contexto"],
-  nacimientos: ["rp", "caravana_control", "caravana_color", "madre_rp", "fecha_nac", "sexo", "pelo", "peso_nac", "padre_rp", "chip", "observaciones"],
+  nacimientos: ["rp", "caravana_control", "caravana_color", "madre_rp", "fecha_nac", "sexo", "pelo", "peso_nac", "padre_rp", "chip", "mellizos", "observaciones"],
   identificar: ["caravana_control", "caravana_color", "rp_actual", "rp", "chip"],
   sanidad: ["rp", "fecha", "producto", "dosis", "motivo"],
   mediciones: ["rp", "fecha", "tipo", "valor"],
@@ -477,15 +579,25 @@ function planilla(db, { rps, lote_id, conjunto, columnas, titulo, campoNombre, f
 // ── RESUMEN ──────────────────────────────────────────────────────────────────
 
 function resumen(out, simular, que) {
-  const ok = out.filter(r => r.ok), mal = out.filter(r => !r.ok), conAviso = out.filter(r => r.ok && r.avisos && r.avisos.length);
+  const ok = out.filter(r => r.ok), conAviso = out.filter(r => r.ok && r.avisos && r.avisos.length);
+  // Lo que ya estaba en la base no es un error de carga: es un dato repetido.
+  const repes = out.filter(r => r.ya_estaba), mal = out.filter(r => !r.ok && !r.ya_estaba);
   const plural = n => n === 1 ? que : que.endsWith("n") ? que.slice(0, -1) + "nes" : que + "s";
+  const cargada = n => (que.endsWith("o") ? "cargado" : "cargada") + (n === 1 ? "" : "s");
+  const textoRepes = repes.length
+    ? ` ${repes.length} ya estaba${repes.length === 1 ? "" : "n"} cargado${repes.length === 1 ? "" : "s"}: ${repes.slice(0, 5).map(r => `${r.rp_existente || r.rp}${r.madre ? " (madre " + r.madre + ")" : ""}`).join(", ")}${repes.length > 5 ? "…" : ""}, no se duplicó.`
+    : "";
+  const textoMal = mal.length
+    ? ` ${mal.length} no: ${mal.slice(0, 5).map(r => `${r.rp || "fila " + r.fila} (${r.error})`).join(", ")}${mal.length > 5 ? "…" : ""}.`
+    : "";
   return {
-    ok: ok.length > 0, simulado: !!simular, total: out.length, bien: ok.length, mal: mal.length, con_avisos: conAviso.length,
+    ok: ok.length > 0, simulado: !!simular, total: out.length, bien: ok.length, mal: mal.length,
+    ya_estaban: repes.length, con_avisos: conAviso.length,
     filas: out,
     mensaje: simular
-      ? `${ok.length} ${plural(ok.length)} para cargar${mal.length ? `, ${mal.length} con error` : ""}${conAviso.length ? `, ${conAviso.length} con avisos` : ""}. Revisá y confirmá.`
-      : `${ok.length} ${plural(ok.length)} cargada${ok.length === 1 ? "" : "s"}${mal.length ? `. ${mal.length} no: ${mal.slice(0, 5).map(r => `${r.rp || "fila " + r.fila} (${r.error})`).join(", ")}${mal.length > 5 ? "…" : ""}` : ""}.`
+      ? `${ok.length} ${plural(ok.length)} para cargar${mal.length ? `, ${mal.length} con error` : ""}${conAviso.length ? `, ${conAviso.length} con avisos` : ""}.${textoRepes} Revisá y confirmá.`
+      : `${ok.length} ${plural(ok.length)} ${cargada(ok.length)}.${textoRepes}${textoMal}`
   };
 }
 
-module.exports = { pesadas, sanidad, nacimientos, identificar, mediciones, notas, importarCsv, parsearCsv, parsearLineas, planilla, rpProvisorio, fechaIso, numero, SINONIMOS, CAMPOS_POR_TIPO };
+module.exports = { pesadas, sanidad, nacimientos, identificar, mediciones, notas, importarCsv, parsearCsv, parsearLineas, planilla, rpProvisorio, yaCargado, padrePorFecha, fechaIso, numero, SINONIMOS, CAMPOS_POR_TIPO };

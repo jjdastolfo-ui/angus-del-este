@@ -40,7 +40,7 @@ Abre en http://localhost:3001. Sin clave de API el tablero anda igual; sólo el 
 | `CAMPOS` | JSON con los campos (ver abajo) |
 | `MODELO` | opcional. El modelo bueno, para lo que hay que pensar. Por defecto `claude-opus-5` |
 | `MODELO_SIMPLE` | opcional. El barato, para consultas directas y cargas. Por defecto `claude-haiku-4-5` |
-| `MODELO_RUTEO` | opcional. `auto` (por defecto) elige solo; `grande` manda todo al bueno; `simple`, todo al barato |
+| `MODELO_RUTEO` | opcional. `grande` (por defecto): piensa Opus en todo. `auto` reparte con el barato; `simple`, todo al barato |
 | `ESFUERZO` | opcional. `medium` por defecto (alcanza para el uso diario). `low` para gastar lo mínimo, `high`/`xhigh`/`max` para preguntas difíciles |
 | `TWILIO_SID` / `TWILIO_TOKEN` (o `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN`) | sólo si se usa WhatsApp |
 | `RESPALDO_CLAVE` (o `CLAVE_BACKUP`) | una clave cualquiera; habilita `/api/respaldo?clave=...` para bajar una copia de la base |
@@ -107,6 +107,13 @@ en el historial queda el RP real, no el armado. Para limpiarlo de una vez, en la
 pestaña Empresa: "Terneros cargados dos veces" los lista y "Unificar" marca el
 repetido como DUPLICADO con una nota (no se borra nada, y deja de contar).
 Un mellizo de distinto sexo nunca se toma por duplicado.
+
+Esa misma pantalla busca ahora los que están **dos veces dentro de un mismo
+campo**, que es lo que pasaba cuando el parto se cargaba una vez por la libreta y
+otra dictada al bot: como venían por caravana control, el RP provisorio se corría
+solo (`C1`, `C2`) y el duplicado no cantaba. Queda el que ya tiene RP definitivo;
+si los dos son provisorios, el que tiene más datos, y en el empate el que se
+cargó primero. Al cargar ya no puede volver a pasar: ver **Relevar**.
 
 Para no equivocarse cuando dos campos tienen animales con el mismo número, una
 cría se atribuye a la madre de otro campo sólo si no puede ser de una madre del
@@ -195,7 +202,10 @@ entendió, qué RP no reconoce y qué no cierra; *Confirmar* escribe.
 
 - **Pesadas**: se pega `RP peso`, una línea por animal, como está en la libreta. Avisa si un peso bajó más de 12% o subió más de 3 kg/día respecto de la pesada anterior, y no repite una pesada ya cargada.
 - **Sanidad**: un producto a una lista de RP, a un lote o a todos.
-- **Nacimientos**: `caravana-control madre fecha sexo peso [pelaje] [padre]`. El ternero queda con la caravana control (número y color) y un RP provisorio `C`+número, marcado "sin RP" en Nacimientos. Avisa si la madre no existe o ya tiene cría este año.
+- **Nacimientos**: `caravana-control madre fecha sexo peso [pelaje] [padre]`. El ternero queda con la caravana control (número y color) y un RP provisorio `C`+número, marcado "sin RP" en Nacimientos. Dos cosas las resuelve solo, y son las que más se erraban a mano:
+  - **No carga dos veces el mismo parto.** Si esa madre ya tiene una cría con esa fecha (±5 días) y del mismo sexo, lo rechaza y dice con qué RP quedó. Antes esto no se veía: al venir por caravana control, el RP provisorio se corre solo para no pisar al que ya está, así que el duplicado entraba con otro número. Dos de distinto sexo pasan (son mellizos); dos del mismo sexo entran sólo con `mellizos: true`.
+  - **El padre lo saca de la fecha.** La gestación son 283 días: cruza la fecha de nacimiento con los servicios de la madre y pone el padre solo, diciendo de dónde lo sacó (“por la IATF del 15-11: nació a 2 días de la fecha probable”, “repaso con PONCHO”). Si hay más de un candidato, o ningún servicio explica esa fecha, lo deja vacío y avisa en vez de inventarlo. Si le dictan un padre que no cierra con la fecha, lo carga igual pero lo dice.
+  - Avisa también si la madre no existe, si figura como macho o si ya tuvo otra cría este año.
 - **Asignar RP / chip**: `control RP-definitivo [chip]`. Es el paso siguiente: el RP provisorio se reemplaza por el definitivo y se carga el chip; madre, pesadas y notas siguen con el animal. También desde la ficha del ternero. Si hay dos controles con el mismo número, se distingue por color.
 - **Mediciones**: CC, CE, altura, frame.
 - **Notas**: `RP texto`. Las palabras clave (renga, mala madre, abortó…) se entienden solas.
@@ -256,30 +266,38 @@ tablero, pestaña **Archivos**, la primera caja muestra lo de hoy, lo del mes, e
 promedio por consulta y cuánto ahorró el caché, con el detalle por día, por canal
 (tablero / WhatsApp) y por modelo. También en `GET /api/uso?desde=&hasta=`.
 
-### Cada pregunta con el modelo que le corresponde
+### Por qué piensa Opus, y no un modelo más barato
 
-La mayoría de lo que se le pregunta al bot en el campo no necesita un modelo
-caro: *"¿cuánto pesó la 148?"*, *"ficha de la 23"*, *"cargá estas pesadas"* son
-buscar un dato o escribirlo. Eso va a **Haiku**, que sale unas cinco veces menos.
-Lo que hay que pensar —*"¿qué vacas conviene descartar?"*, *"¿por qué bajó el
-destete?"*, *"revisá si hay algo mal cargado"*, un tablero, un informe— va a
-**Opus**. También van a Opus las fotos y los PDF: leer una libreta escrita a
-mano no es tarea para el chico.
+Se probó repartir: las consultas simples a Haiku, el análisis a Opus. En papel
+baja el gasto a la mitad. En la cancha no va, y la razón es una sola: **el que
+pregunta no tiene cómo darse cuenta de que la respuesta salió mal**. Si el bot
+dice que la 148 pesó 380, se le cree. Si carga un nacimiento y le erra el padre,
+queda mal cargado y se descubre un año después. Una respuesta floja cuesta mucho
+más que los centavos que ahorra.
 
-El ruteo mira el mensaje: si pide analizar, comparar, decidir o explicar, va al
-bueno; si es corto y directo, o es una lista de `RP peso` para cargar, va al
-barato; ante la duda, el bueno. Y si el barato se queda sin respuesta, la
-pregunta se rehace sola con Opus (salvo que ya haya escrito en la base: eso no
-se repite, para no cargar dos veces).
+Así que de fábrica va todo a Opus (`MODELO_RUTEO=grande`). Para bajar el gasto,
+las perillas que **no** tocan la calidad del razonamiento:
 
-En el tablero se ve el gasto abierto por modelo y cuánto ahorró el ruteo contra
-haber usado Opus para todo. Debajo de cada respuesta del chat dice qué modelo la
-contestó.
+- El **caché** del prompt, que ya está y es lo que más baja (la parte estable no
+  se vuelve a cobrar entera en cada pregunta).
+- El **esfuerzo**: `ESFUERZO=low` para épocas de mucho volumen y consultas
+  simples, `medium` para el día a día.
+- En WhatsApp la conversación se corta a 48 horas: no arrastra meses de historia.
 
-Si algo no convence, se fija con `MODELO_RUTEO=grande` (todo a Opus) o
-`MODELO_RUTEO=simple` (todo a Haiku), sin subir código.
+El reparto entre dos modelos queda armado por si algún día el gasto molesta de
+verdad. Se enciende con `MODELO_RUTEO=auto` y funciona así: las consultas
+directas ("cuánto pesó la 148", "ficha de la 23") y las listas de `RP peso` van
+a Haiku; **todo lo que analiza o escribe va a Opus**, aunque el mensaje sea
+corto; las fotos y los PDF también; ante la duda, Opus. Si el barato se queda sin
+respuesta, la pregunta se rehace sola con Opus, salvo que ya haya escrito en la
+base (eso no se repite, para no cargar dos veces). En el tablero se ve el gasto
+abierto por modelo y cuánto ahorró el reparto; debajo de cada respuesta del chat
+dice qué modelo la contestó.
 
-Las otras perillas, para el modelo bueno:
+`MODELO_RUTEO=simple` manda todo a Haiku: sirve para medir con `npm run evaluar`
+cuánto se pierde, no para usarlo así.
+
+El esfuerzo de Opus, en detalle:
 
 | Configuración | Costo relativo | Cuándo |
 |---|---|---|

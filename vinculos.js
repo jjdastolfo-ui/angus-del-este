@@ -386,19 +386,59 @@ function crear({ CAMPOS, getDB, empresasDe }) {
     return !!(m && m.length >= 2 && h !== m && h.includes(m));
   };
 
-  /** Los terneros que figuran dos veces, uno en cada campo. */
+  /**
+   * Los terneros que figuran dos veces: uno en cada campo, o los dos en el
+   * mismo. Lo segundo pasaba cuando el mismo parto se cargaba dos veces con
+   * caravanas control distintas: el RP provisorio se corría solo y nadie lo
+   * notaba. Ahora relevar lo frena al cargar, pero lo viejo hay que limpiarlo.
+   */
   function duplicados(campoKey, opciones = {}) {
     const db = getDB(campoKey);
     const empresa = empresasDe().empresaDe(campoKey);
     const mapa = mapaCriasFuera(campoKey, { fresco: opciones.fresco });
     const pares = [];
-    if (!mapa.size) return { campo: campoKey, campo_nombre: nombreCampo(campoKey), empresa: empresa.nombre, pares, resumen: { total: 0 } };
 
-    const locales = db.prepare(`SELECT h.id, h.rp, h.fecha_nac, h.sexo, h.estado, h.madre_rp,
+    const locales = db.prepare(`SELECT h.id, h.rp, h.fecha_nac, h.sexo, h.estado, h.madre_rp, h.rp_provisorio,
         (SELECT peso FROM pesadas p WHERE p.animal_id=h.id AND upper(COALESCE(p.contexto,''))='NACIMIENTO' ORDER BY p.fecha LIMIT 1) pn,
         (SELECT peso FROM pesadas p WHERE p.animal_id=h.id AND upper(COALESCE(p.contexto,''))='DESTETE' ORDER BY p.fecha DESC LIMIT 1) destete,
         (SELECT COUNT(*) FROM pesadas p WHERE p.animal_id=h.id) n_pesadas
       FROM animales h WHERE COALESCE(h.madre_rp,'') <> '' AND upper(COALESCE(h.estado,'ACTIVO')) <> 'DUPLICADO'`).all();
+
+    // ── Dos veces en este mismo campo ──
+    // Cuál queda: el que ya tiene RP definitivo antes que el provisorio, después
+    // el que tiene más datos, y en el empate el que se cargó primero.
+    const puntos = c => (c.destete > 0 ? 4 : 0) + (c.pn > 0 ? 2 : 0) + ((c.n_pesadas || 0) > 1 ? 1 : 0);
+    const porMadre = new Map();
+    for (const l of locales) {
+      const k = compacto(l.madre_rp);
+      if (!porMadre.has(k)) porMadre.set(k, []);
+      porMadre.get(k).push(l);
+    }
+    for (const hermanos of porMadre.values()) {
+      for (let i = 0; i < hermanos.length - 1; i++) for (let j = i + 1; j < hermanos.length; j++) {
+        const a = hermanos[i], b = hermanos[j];
+        if (!mismoTernero(a, b)) continue;
+        const provA = a.rp_provisorio === 1, provB = b.rp_provisorio === 1;
+        const armA = rpArmado(a.rp, a.madre_rp), armB = rpArmado(b.rp, b.madre_rp);
+        let queda, sobra, porque;
+        if (provA !== provB) { queda = provA ? b : a; sobra = provA ? a : b; porque = `"${sobra.rp}" todavía no tiene RP definitivo`; }
+        else if (armA !== armB) { queda = armA ? b : a; sobra = armA ? a : b; porque = `"${sobra.rp}" está armado con el RP de la madre`; }
+        else if (puntos(a) !== puntos(b)) { queda = puntos(a) > puntos(b) ? a : b; sobra = puntos(a) > puntos(b) ? b : a; porque = "queda el que tiene más datos cargados"; }
+        else { queda = a.id <= b.id ? a : b; sobra = a.id <= b.id ? b : a; porque = "queda el que se cargó primero"; }
+        pares.push({
+          madre: a.madre_rp, fecha_nac: a.fecha_nac, sexo: a.sexo, mismo_campo: true,
+          aca: { rp: queda.rp, campo: campoKey, campo_nombre: nombreCampo(campoKey), pn: queda.pn, destete: queda.destete, armado: rpArmado(queda.rp, queda.madre_rp) },
+          alla: { rp: sobra.rp, campo: campoKey, campo_nombre: nombreCampo(campoKey), pn: sobra.pn, destete: sobra.destete, armado: rpArmado(sobra.rp, sobra.madre_rp) },
+          queda: { rp: queda.rp, campo: campoKey }, sobra: { rp: sobra.rp, campo: campoKey },
+          porque: `el mismo parto cargado dos veces acá: ${porque}`
+        });
+      }
+    }
+
+    // ── Uno acá y otro en otro campo de la empresa ──
+    if (!mapa.size) return { campo: campoKey, campo_nombre: nombreCampo(campoKey), empresa: empresa.nombre,
+      pares: pares.slice(0, opciones.limite || 500),
+      resumen: { total: pares.length, mismo_campo: pares.length, sobran_aca: pares.length } };
 
     for (const l of locales) {
       const fuera = mapa.get(compacto(l.madre_rp)) || [];
@@ -407,7 +447,6 @@ function crear({ CAMPOS, getDB, empresasDe }) {
         if (!mismoTernero(l, f)) continue;
         // Cuál queda: el que no tenga un RP armado; si empatan, el de más datos.
         const armadoL = rpArmado(l.rp, l.madre_rp), armadoF = rpArmado(f.rp, l.madre_rp);
-        const puntos = c => (c.destete > 0 ? 4 : 0) + (c.pn > 0 ? 2 : 0) + ((c.n_pesadas || 0) > 1 ? 1 : 0);
         let queda, sobra;
         if (armadoL !== armadoF) { queda = armadoL ? f : l; sobra = armadoL ? l : f; }
         else if (puntos(f) !== puntos(l)) { queda = puntos(f) > puntos(l) ? f : l; sobra = puntos(f) > puntos(l) ? l : f; }
@@ -425,7 +464,8 @@ function crear({ CAMPOS, getDB, empresasDe }) {
     }
     return { campo: campoKey, campo_nombre: nombreCampo(campoKey), empresa: empresa.nombre,
       pares: pares.slice(0, opciones.limite || 500),
-      resumen: { total: pares.length, sobran_aca: pares.filter(p => p.sobra.campo === campoKey).length } };
+      resumen: { total: pares.length, mismo_campo: pares.filter(p => p.mismo_campo).length,
+        sobran_aca: pares.filter(p => p.sobra.campo === campoKey).length } };
   }
 
   /**

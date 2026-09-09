@@ -162,8 +162,9 @@ const HERRAMIENTAS = [
       properties: {
         tipo: { type: "string", enum: ["pesadas", "sanidad", "nacimientos", "identificar", "mediciones", "notas"] },
         filas: { type: "array", items: { type: "object" }, description:
-          "pesadas: [{rp, peso, fecha?, contexto?}] · nacimientos: [{rp?, caravana_control?, caravana_color?, madre_rp, fecha_nac, sexo, pelo?, peso_nac?, padre_rp?, chip?, observaciones?}] " +
-          "(sin rp queda con RP provisorio C+control) · identificar: [{control? | rp_actual?, color?, rp?, chip?}] (asigna el RP definitivo y/o el chip) · " +
+          "pesadas: [{rp, peso, fecha?, contexto?}] · nacimientos: [{rp?, caravana_control?, caravana_color?, madre_rp, fecha_nac, sexo, pelo?, peso_nac?, padre_rp?, chip?, mellizos?, observaciones?}] " +
+          "(sin rp queda con RP provisorio C+control; el padre lo deduce solo de los servicios de la madre y la fecha, no lo inventes; " +
+          "si esa madre ya tiene una cría de esa fecha lo rechaza por repetido, y sólo con mellizos:true lo carga igual) · identificar: [{control? | rp_actual?, color?, rp?, chip?}] (asigna el RP definitivo y/o el chip) · " +
           "mediciones: [{rp, valor, tipo?, fecha?}] · notas: [{rp, texto, fecha?}] · sanidad: no usa filas, usa rps/lote_id/todos." },
         rps: { type: "array", items: { type: "string" }, description: "sanidad: a quiénes." },
         lote_id: { type: "integer", description: "sanidad: a todo un lote." },
@@ -409,11 +410,17 @@ function crear(deps) {
     return hallado.key;
   }
   const CAMPOS = deps.CAMPOS || {};
-  // Dos modelos: el bueno para pensar, uno barato para lo directo. El ruteo
-  // decide cuál se usa en cada mensaje; con MODELO_RUTEO se puede fijar.
+  // Piensa Opus, siempre. Se probó repartir las consultas simples a un modelo
+  // barato para gastar menos, y no va: acá el que pregunta no tiene cómo darse
+  // cuenta de que la respuesta salió mal. Si el bot dice que la 148 pesó 380,
+  // se le cree. Un error así vale mucho más que lo que se ahorra.
+  //
+  // La maquinaria queda, apagada: con MODELO_RUTEO=auto se reparte entre los dos
+  // (consultas al barato, análisis y todo lo que escribe a Opus), y con
+  // MODELO_RUTEO=simple va todo al barato. Por defecto, "grande": todo a Opus.
   const modelo = deps.modelo || process.env.MODELO || "claude-opus-5";
   const modeloSimple = deps.modeloSimple || process.env.MODELO_SIMPLE || "claude-haiku-4-5";
-  const ruteo = String(deps.ruteo || process.env.MODELO_RUTEO || "auto").toLowerCase();
+  const ruteo = String(deps.ruteo || process.env.MODELO_RUTEO || "grande").toLowerCase();
   // "medium" alcanza para casi todo lo del campo y sale bastante menos que "high".
   // Se sube con la variable ESFUERZO cuando hace falta exprimirlo (xhigh, max).
   const esfuerzo = deps.esfuerzo || process.env.ESFUERZO || "medium";
@@ -516,6 +523,8 @@ LO QUE SABÉS DE GANADERÍA y no hace falta que nadie te cargue:
 · Cabeza, cuerpo y cola son tramos de la parición. Cuanto antes pare, más pesado llega el ternero al destete.
 · Lo que mide de verdad a una vaca es cuánto desteta EN RELACIÓN A SU PROPIO PESO: una de 430 kg que desteta 255 rinde 59%, mejor que una de 600 que desteta 250 (42%), porque come menos todo el año.
 · De dónde vino una preñez se confirma con la fecha de nacimiento: ±10 días de la fecha probable de la IATF es IATF; después, tramos de 20 días son toro cabeza, cuerpo y cola.
+· El padre de un ternero no se recuerda: se calcula. relevar nacimientos cruza la fecha con los servicios de la madre y lo pone solo, y dice de dónde lo sacó. Si no puede (la madre no tiene servicios, o hay más de un candidato), lo deja vacío y avisa: ahí preguntá, no lo completes de memoria. Si te dictan un padre que no cierra con la fecha, lo carga igual pero te avisa: contale eso al usuario.
+· Un parto ya cargado no se carga de nuevo: si esa madre ya tiene una cría con esa fecha, relevar lo rechaza y te dice con qué RP quedó. No insistas cambiándole el RP ni la caravana: eso es lo que dejaba el mismo ternero cargado dos veces. Si de verdad son mellizos, recién ahí mandá mellizos: true.
 
 EL ERROR QUE NO PODÉS COMETER: si una vaca figura preñada y no tiene cría registrada, NO concluyas que abortó sin mirar CUÁNDO fue el servicio. Si fue hace menos de nueve meses, esa vaca simplemente todavía no parió. plantel ya distingue PREÑADA (esperando) de FALLÓ por ABORTO (vencida): confiá en eso.
 
@@ -757,8 +766,16 @@ ${cal.cortes ? `Bloques de la parición en curso: cabeza hasta ${cal.cortes.CABE
   // que se ahorran. Y si el chico no llega a una conclusión, se reintenta con
   // el bueno automáticamente.
   const PENSADO = /\b(por qu[eé]|porqu[eé]|conviene|convendr|analiz|compar|eval[uú]|recomend|sugier|decid|elegir|descart|mal cargad|inconsisten|revis[aá]|audit|tablero|informe|resum[ií]|explic|estrategia|proyect|estim|tendencia|evoluci|rendimiento|eficien|ranking|mejor(es)? |peor(es)? |cu[aá]l(es)? conv|qu[eé] hago|qu[eé] harías|opini|pensá|razon|c[oó]mo vien|c[oó]mo va|c[oó]mo est|qu[eé] tal|qu[eé] pas[oó] con)/i;
-  const DIRECTO = /^(\s*(cu[aá]nto|cu[aá]ntos|cu[aá]ntas|qui[eé]n|d[oó]nde|cu[aá]ndo|qu[eé] edad|qu[eé] peso|pes[oó]|ficha|dame la ficha|mostrame|list[aá]|carg[aá]|anot[aá]|agreg[aá]|sum[aá]|pon[eé]|marc[aá]|naci[oó]|vendi|sali[oó]))/i;
+  const DIRECTO = /^(\s*(cu[aá]nto|cu[aá]ntos|cu[aá]ntas|qui[eé]n|d[oó]nde|cu[aá]ndo|qu[eé] edad|qu[eé] peso|pes[oó]|ficha|dame la ficha|mostrame|list[aá]|export|dame|busc[aá]|traeme))/i;
+  // Escribir en la base no es "un dato más": un nacimiento hay que cruzarlo con
+  // la madre, con los servicios y con lo que ya está cargado, y equivocarse ahí
+  // deja basura que después cuesta sacar. Todo lo que escribe va al bueno.
+  const ESCRIBE = /\b(carg[aáue]|anot[aá]|agreg[aá]|sum[aá]|pon[eé]|met[eé]|marc[aá]|dar de (alta|baja)|identific[aá]|registr[aá]|naci[oó]|nacieron|pari[oó]|melliz|vend[íi]|vendimos|traslad[aá]|destin[aá]|muri[oó]|control\s*\d|chip\s*\d)/i;
   const LINEAS_DATOS = /^\s*[A-Za-z0-9\-\.]+[\s,;\t]+[\d,\.]+\s*$/;
+  // Una frase corta que pregunta es barata; una frase corta que afirma algo del
+  // campo ("la 45 al corral 3") casi siempre es una carga, y esa va al bueno.
+  const PREGUNTA = /\?|\b(qu[eé]|cu[aá]l|cu[aá]nt|qui[eé]n|d[oó]nde|cu[aá]ndo|c[oó]mo|hay|tiene|tienen|existe|sab[eé]s)\b/i;
+  const SALUDO = /^\s*(hola|buenas|buen d[ií]a|gracias|dale|ok|listo|perfecto|bien)[\s!.,]*$/i;
 
   const piensaAdaptativo = m => /^claude-(opus-5|sonnet-5|fable-5)/.test(String(m || ""));
 
@@ -775,8 +792,11 @@ ${cal.cortes ? `Bloques de la parición en curso: cabeza hasta ${cal.cortes.CABE
       return { modelo: modeloSimple, porque: "es una lista de datos para cargar" };
     if (PENSADO.test(t)) return { modelo, porque: "pide analizar o decidir" };
     if (t.length > 240) return { modelo, porque: "la pregunta es larga" };
-    if (DIRECTO.test(t)) return { modelo: modeloSimple, porque: "es un dato directo o una carga" };
-    if (t.length <= 60) return { modelo: modeloSimple, porque: "es una pregunta corta" };
+    // Una consulta que empieza preguntando y no toca nada: ahí sí el barato.
+    if (DIRECTO.test(t) && !ESCRIBE.test(t)) return { modelo: modeloSimple, porque: "es una consulta directa" };
+    if (ESCRIBE.test(t)) return { modelo, porque: "escribe en la base: hay que pensarlo" };
+    if (SALUDO.test(t)) return { modelo: modeloSimple, porque: "es un saludo" };
+    if (t.length <= 60 && PREGUNTA.test(t)) return { modelo: modeloSimple, porque: "es una pregunta corta" };
     return { modelo, porque: "por las dudas, el bueno" };
   }
 
