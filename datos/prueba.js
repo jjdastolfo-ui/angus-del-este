@@ -118,7 +118,7 @@ const nota = relevarMod.notas(db, plantelMod, { filas: [{ rp: "13", texto: "abor
 ok(nota.filas[0].avisos.length === 1, "la nota grave avisa");
 
 seccion("Caravana control → RP → chip");
-const nacC = relevarMod.nacimientos(db, { filas: [{ caravana_control: "150", caravana_color: "blanca", madre_rp: "21", fecha_nac: "02/09/2026", sexo: "M", peso_nac: 33 }, { caravana_control: "150", caravana_color: "verde", madre_rp: "23", fecha_nac: "02/09/2026", sexo: "H", peso_nac: 30 }] });
+const nacC = relevarMod.nacimientos(db, { filas: [{ caravana_control: "150", caravana_color: "blanca", madre_rp: "B579", fecha_nac: "02/09/2026", sexo: "M", peso_nac: 33 }, { caravana_control: "150", caravana_color: "verde", madre_rp: "23", fecha_nac: "02/09/2026", sexo: "H", peso_nac: 30 }] });
 ok(nacC.bien === 2 && nacC.filas[0].rp === "C150" && nacC.filas[0].provisorio && nacC.filas[1].rp === "C150-VER" && nacC.filas[1].avisos.some(x => /control 150/.test(x)), "dos terneros con control 150: C150 y C150-VER, con aviso");
 const c150 = animalesMod.porRp(db, "C150");
 ok(c150 && c150.rp_provisorio === 1 && c150.caravana_control === "150" && c150.caravana_color === "BLANCA", "queda guardada la caravana control y el color");
@@ -129,12 +129,46 @@ relevarMod.pesadas(db, { filas: [{ rp: "C150", peso: 40 }], fecha: "2026-09-03",
 const idn = relevarMod.identificar(db, { filas: [{ control: "150", color: "blanca", rp: "2077", chip: "320100362601234" }, { control: "150", color: "verde", chip: "320100362601235" }, { control: "999", rp: "2079" }] });
 ok(idn.bien === 2 && idn.mal === 1 && /No hay ningún ternero con caravana control 999/.test(idn.filas[2].error), "identifica dos y rechaza una control inexistente");
 const a2077 = animalesMod.porRp(db, "2077");
-ok(a2077 && !a2077.rp_provisorio && a2077.chip === "320100362601234" && a2077.caravana_control === "150" && a2077.madre_rp === "21", "el C150 ahora es 2077 con chip, y conserva madre y control");
+ok(a2077 && !a2077.rp_provisorio && a2077.chip === "320100362601234" && a2077.caravana_control === "150" && a2077.madre_rp === "B579", "el C150 ahora es 2077 con chip, y conserva madre y control");
 ok(animalesMod.ficha(db, "2077").pesadas.length === 2, "las pesadas siguen con el animal identificado");
 ok(animalesMod.porRp(db, "C150-VER").chip === "320100362601235" && animalesMod.porRp(db, "C150-VER").rp_provisorio === 1, "al verde sólo se le puso el chip: sigue provisorio");
 const dupRp = relevarMod.identificar(db, { filas: [{ rp_actual: "C150-VER", rp: "2077" }], simular: true });
 ok(!dupRp.filas[0].ok && /ya lo tiene otro animal/.test(dupRp.filas[0].error), "no deja asignar un RP que ya existe");
 ok(exportarMod.conjunto(db, mods, "nacimientos").filas.some(f => f.rp === "C150-VER" && f.rp_provisorio_texto === "provisorio"), "el export de nacimientos marca los provisorios");
+
+seccion("El mismo parto no se carga dos veces");
+// En la semilla, F351 ya tiene a 26153 nacida el 2026-08-17. Todo simulado:
+// estas pruebas no escriben, así que no le mueven el piso a las de abajo.
+const rep1 = relevarMod.nacimientos(db, { filas: [{ rp: "P001", madre_rp: "F351", fecha_nac: "19/08/2026", sexo: "H", peso_nac: 32 }], simular: true });
+ok(!rep1.filas[0].ok && rep1.filas[0].ya_estaba && rep1.filas[0].rp_existente === "26153" && rep1.ya_estaban === 1, "misma madre y misma fecha: ya estaba cargado, no se duplica");
+ok(/no se duplicó/.test(rep1.mensaje) && rep1.mal === 0, "lo dice en el mensaje, y no lo cuenta como error de carga");
+const mel = relevarMod.nacimientos(db, { filas: [{ rp: "P002", madre_rp: "F351", fecha_nac: "19/08/2026", sexo: "H", peso_nac: 30, mellizos: true }], simular: true });
+ok(mel.bien === 1 && /mellizos/.test(rep1.filas[0].error), "con mellizos: true entra, y el error de antes explica cómo");
+const otroSexo = relevarMod.nacimientos(db, { filas: [{ rp: "P003", madre_rp: "F351", fecha_nac: "19/08/2026", sexo: "M", peso_nac: 30 }], simular: true });
+ok(otroSexo.bien === 1, "un mellizo de distinto sexo pasa solo: no es el mismo ternero");
+const lejos = relevarMod.nacimientos(db, { filas: [{ rp: "P004", madre_rp: "F351", fecha_nac: "01/07/2026", sexo: "H", peso_nac: 33 }], simular: true });
+ok(lejos.bien === 1 && lejos.filas[0].avisos.some(a => /ya tiene cría este año/.test(a)), "un parto lejano de la misma madre entra, pero avisa");
+// Por caravana control, que es donde peor pegaba: el RP provisorio se corre
+// solo para no pisar al que ya está, y así el duplicado quedaba invisible.
+const dupCtrl = relevarMod.nacimientos(db, { filas: [{ caravana_control: "150", caravana_color: "blanca", madre_rp: "B579", fecha_nac: "03/09/2026", sexo: "M", peso_nac: 33 }], simular: true });
+ok(!dupCtrl.filas[0].ok && dupCtrl.filas[0].rp_existente === "2077", "la misma caravana control y fecha tampoco entra dos veces");
+
+seccion("Quién es el padre lo dice la fecha");
+// D572: IATF con KARE 16 el 2025-11-15 (parto probable 2026-08-25) y repaso
+// con PONCHO. La gestación son 283 días: con eso alcanza para saber cuál fue.
+const pIatf = relevarMod.nacimientos(db, { filas: [{ rp: "P005", madre_rp: "D572", fecha_nac: "27/08/2026", sexo: "M", peso_nac: 34 }], simular: true });
+ok(pIatf.filas[0].padre === "KARE 16" && pIatf.filas[0].padre_deducido, "dentro de la ventana de la IATF, el padre es el semen");
+ok(pIatf.filas[0].avisos.some(a => /padre KARE 16, por la IATF/.test(a)), "y dice de dónde lo sacó");
+const pToro = relevarMod.nacimientos(db, { filas: [{ rp: "P006", madre_rp: "D572", fecha_nac: "05/09/2026", sexo: "M", peso_nac: 36 }], simular: true });
+ok(pToro.filas[0].padre === "PONCHO" && pToro.filas[0].avisos.some(a => /repaso/.test(a)), "más tarde que esa ventana, el padre es el toro del repaso");
+// B579 no tuvo IATF en 2024: sólo el toro, con fecha de entrada y de salida.
+const pNat = relevarMod.nacimientos(db, { filas: [{ rp: "P007", madre_rp: "B579", fecha_nac: "24/09/2025", sexo: "H", peso_nac: 31 }], simular: true });
+ok(pNat.filas[0].padre === "LUCUMA" && pNat.filas[0].avisos.some(a => /la concepción cae adentro/.test(a)), "sin IATF, el padre es el toro que estaba cuando la concibió");
+const pDicho = relevarMod.nacimientos(db, { filas: [{ rp: "P008", madre_rp: "D572", fecha_nac: "27/08/2026", sexo: "M", padre_rp: "IVAR 4" }], simular: true });
+ok(pDicho.filas[0].padre === "IVAR 4" && pDicho.filas[0].avisos.some(a => /corresponde KARE 16/.test(a)), "si el padre que dictaron no cierra con la fecha, lo carga igual pero avisa");
+const pSin = relevarMod.nacimientos(db, { filas: [{ rp: "P009", madre_rp: "D572", fecha_nac: "10/04/2026", sexo: "M" }], simular: true });
+ok(pSin.filas[0].padre === null && pSin.filas[0].avisos.some(a => /ningun[oa] de los .* servicio/.test(a)), "si ningún servicio explica esa fecha, queda sin padre y lo dice");
+ok(!pSin.filas[0].avisos.some(a => /FPP/.test(a) && /73[0-9]|37[0-9]/.test(a)), "no avisa por servicios de otras temporadas");
 
 seccion("Importar CSV");
 const csvV = fs.readFileSync(path.join(__dirname, "nacimientos_el_triunfo_2026-08-31.csv"), "utf8");
@@ -271,37 +305,46 @@ const eventos = [];
   // Los parámetros de la llamada: modelo, thinking adaptativo, esfuerzo, caché en el system.
   const params = clienteFalsoParams();
   ok(params.system[0].cache_control.type === "ephemeral", "manda el cache_control en la parte estable");
-  // El pensamiento adaptativo es de los modelos nuevos: al barato no se le manda.
-  ok(!params.thinking && !params.output_config, "al modelo barato no se le mandan thinking ni esfuerzo");
-  const botG = botMod.crear({ plantelMod, animalesMod, destinosMod, exportarMod, relevarMod, guardarTablero: S.guardarTablero, CAMPOS: S.CAMPOS,
-    ruteo: "grande", cliente: clienteFalso([() => ({ content: [texto("listo")] })]) });
-  await botG.responder(db, "Prueba", "¿cuántas fallaron?", { campoKey: "principal" });
-  const pg = clienteFalsoParams();
-  ok(pg.model === botG.modelo && pg.thinking.type === "adaptive" && pg.output_config.effort === botG.esfuerzo, "al modelo bueno sí: thinking adaptativo y esfuerzo");
+  ok(params.model === bot2.modelo && params.thinking.type === "adaptive" && params.output_config.effort === bot2.esfuerzo, "por defecto contesta Opus, con thinking adaptativo y esfuerzo");
+  ok(bot2.ruteo === "grande", "por defecto no hay reparto: piensa siempre el bueno");
   ok(bot2.modelo === (process.env.MODELO || "claude-opus-5") && bot2.modeloSimple === (process.env.MODELO_SIMPLE || "claude-haiku-4-5"), "los dos modelos configurados (Opus 5 y Haiku por defecto)");
-  ok(params.model === bot2.modeloSimple, "una pregunta corta y directa la contesta el modelo barato");
+  const soloOpus = ["cuántas vacas hay", "ficha de la 23", "hola", "cargá 15 kg a la 100"]
+    .filter(t => bot2.elegirModelo(t).modelo !== bot2.modelo);
+  ok(!soloOpus.length, "con la configuración de fábrica, todo va a Opus" + (soloOpus.length ? ": " + soloOpus.join(" | ") : ""));
 
-  // ── El ruteo: qué va al modelo barato y qué al bueno ──────────────────────
-  const alSimple = ["¿cuántas vacas hay?", "cuánto pesó la 148", "ficha de la 23", "cargá 15 kg a la 100",
-    "mostrame las preñadas", "12 450\n13 470\n14 490\n15 505", "anotá que la 7 parió hoy"];
+  // ── El reparto, cuando se lo enciende con MODELO_RUTEO=auto ───────────────
+  // Existe para el día que el gasto moleste, pero viene apagado: acá el que
+  // pregunta no tiene cómo saber si la respuesta salió mal.
+  const bot2a = botMod.crear({ plantelMod, animalesMod, destinosMod, exportarMod, relevarMod, guardarTablero: S.guardarTablero, CAMPOS: S.CAMPOS,
+    ruteo: "auto", cliente: clienteFalso([() => ({ content: [texto("listo")] })]) });
+  await bot2a.responder(db, "Prueba", "¿y las vacías?", { campoKey: "principal" });
+  const pa = clienteFalsoParams();
+  ok(pa.model === bot2a.modeloSimple && !pa.thinking && !pa.output_config, "encendido, una pregunta corta la contesta el barato, y sin thinking (no lo entiende)");
+  const alSimple = ["¿cuántas vacas hay?", "cuánto pesó la 148", "ficha de la 23", "dame el peso de la 100",
+    "mostrame las preñadas", "12 450\n13 470\n14 490\n15 505", "listá los toros", "hola",
+    "el toro KARE 16 qué hijos tiene"];
   const alGrande = ["¿por qué bajó el destete este año?", "qué vacas conviene descartar",
     "revisá si hay algo mal cargado", "armame un tablero de eficiencia", "compará los dos campos",
-    "cuáles son las mejores madres del rodeo"];
-  const malSimple = alSimple.filter(t => bot2.elegirModelo(t).modelo !== bot2.modeloSimple);
-  const malGrande = alGrande.filter(t => bot2.elegirModelo(t).modelo !== bot2.modelo);
+    "cuáles son las mejores madres del rodeo",
+    // Escribir se piensa: un nacimiento hay que cruzarlo con la madre y los
+    // servicios, y si sale mal queda cargado dos veces o con el padre errado.
+    "anotá que la 7 parió hoy", "cargá 15 kg a la 100", "nació un ternero de la 23",
+    "la control 150 es la 2077", "vendimos 12 novillos"];
+  const malSimple = alSimple.filter(t => bot2a.elegirModelo(t).modelo !== bot2a.modeloSimple);
+  const malGrande = alGrande.filter(t => bot2a.elegirModelo(t).modelo !== bot2a.modelo);
   ok(!malSimple.length, "las consultas directas y las cargas van al modelo barato" + (malSimple.length ? ": " + malSimple.join(" | ") : ""));
   ok(!malGrande.length, "lo que hay que analizar va al modelo bueno" + (malGrande.length ? ": " + malGrande.join(" | ") : ""));
-  ok(bot2.elegirModelo("dame la ficha", { conAdjuntos: true }).modelo === bot2.modelo, "si hay archivos para leer, va al bueno");
-  ok(bot2.elegirModelo("").modelo === bot2.modelo && bot2.elegirModelo("x".repeat(300)).modelo === bot2.modelo, "sin texto o con un mensaje largo, el bueno");
+  ok(bot2a.elegirModelo("dame la ficha", { conAdjuntos: true }).modelo === bot2a.modelo, "si hay archivos para leer, va al bueno");
+  ok(bot2a.elegirModelo("").modelo === bot2a.modelo && bot2a.elegirModelo("x".repeat(300)).modelo === bot2a.modelo, "sin texto o con un mensaje largo, el bueno");
 
   // Una lista de "RP peso", por larga que sea, es carga: modelo barato.
   const listaPesadas = Array.from({ length: 40 }, (_, i) => `${100 + i} ${380 + i}`).join("\n");
-  ok(bot2.elegirModelo(listaPesadas).modelo === bot2.modeloSimple, "una lista larga de pesadas sigue siendo carga");
+  ok(bot2a.elegirModelo(listaPesadas).modelo === bot2a.modeloSimple, "una lista larga de pesadas sigue siendo carga");
 
   // Si el barato no llega a nada, se rehace con el bueno y se cobran los dos.
   const usados = [];
   const bot2b = botMod.crear({ plantelMod, animalesMod, destinosMod, exportarMod, relevarMod, guardarTablero: S.guardarTablero, CAMPOS: S.CAMPOS,
-    cliente: clienteFalso([
+    ruteo: "auto", cliente: clienteFalso([
       (params) => { usados.push(params.model); return { content: [texto("")] }; },
       (params) => { usados.push(params.model); return { content: [texto("Quedaron 12 vacas vacías.")] }; }
     ]) });
@@ -311,11 +354,11 @@ const eventos = [];
 
   const usados2 = [];
   const bot2c = botMod.crear({ plantelMod, animalesMod, destinosMod, exportarMod, relevarMod, guardarTablero: S.guardarTablero, CAMPOS: S.CAMPOS,
-    cliente: clienteFalso([
+    ruteo: "auto", cliente: clienteFalso([
       (params) => { usados2.push(params.model); return { content: [uso("t9", "destinar", { rps: ["13"], destino: "engorde" })] }; },
       (params) => { usados2.push(params.model); return { content: [texto("")] }; }
     ]) });
-  await bot2c.responder(db, "Prueba", "poné la 13 en engorde", { campoKey: "principal" });
+  await bot2c.responder(db, "Prueba", "poné la 13 en engorde", { campoKey: "principal", modelo: bot2c.modeloSimple });
   ok(usados2.length === 2 && usados2.every(m => m === bot2c.modeloSimple), "si ya escribió en la base no se rehace: no se carga dos veces");
 
   // Con MODELO_RUTEO fijo no hay ruteo ni reintento.
@@ -541,6 +584,21 @@ const eventos = [];
   ok(leerX("X901", "madre_campo") === null && leerX("X902", "madre_rp") === "11", "arreglar corrige el RP y no toca lo que no existe");
   dbT2.prepare("DELETE FROM animales WHERE rp IN ('X900','X901','X902')").run();
   db.prepare("DELETE FROM animales WHERE rp IN ('Z777','T777')").run();
+  vin.olvidar();
+
+  // ── El mismo parto cargado dos veces en el mismo campo ──
+  // Pasaba con las caravanas control: el RP provisorio se corre solo para no
+  // pisar a otro, así que el duplicado entraba sin que nadie lo viera.
+  const insDup = dbT2.prepare("INSERT INTO animales (rp, sexo, categoria, estado, fecha_nac, madre_rp, caravana_control, rp_provisorio) VALUES (?,?,?,?,?,?,?,?)");
+  insDup.run("C801", "H", "TERNERA", "ACTIVO", "2026-08-10", "011", "801", 1);
+  insDup.run("2801", "H", "TERNERA", "ACTIVO", "2026-08-10", "011", "802", 0);
+  vin.olvidar();
+  const parMismo = vin.duplicados("triunfo", { fresco: true }).pares.find(x => x.mismo_campo && [x.aca.rp, x.alla.rp].includes("C801"));
+  ok(parMismo && parMismo.queda.rp === "2801" && parMismo.sobra.rp === "C801", "encuentra el mismo parto cargado dos veces en un campo, y deja el que ya tiene RP definitivo");
+  ok(/dos veces acá/.test(parMismo.porque), "y aclara que están los dos en el mismo campo");
+  const uniM = vin.unificar("triunfo", { pares: [{ rp: "C801" }] });
+  ok(uniM.bien === 1 && dbT2.prepare("SELECT estado FROM animales WHERE rp='C801'").get().estado === "DUPLICADO", "unificar marca el repetido como DUPLICADO y no borra nada");
+  dbT2.prepare("DELETE FROM animales WHERE rp IN ('C801','2801')").run();
   vin.olvidar();
 
   // ── Las estadísticas de la vaca cuentan los hijos de otros campos ──
