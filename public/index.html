@@ -1245,15 +1245,18 @@ async function buscarDuplicados(){
       if(r.error||!r.pares) continue;
       if(r.pares.length){ porCampo.push({campo:c, pares:r.pares}); todos=todos.concat(r.pares); }
     }
-    est.textContent = todos.length ? todos.length+" terneros aparecen dos veces" : "No hay terneros repetidos entre campos";
+    const nMismo = todos.filter(function(p){ return p.mismo_campo; }).length;
+    est.textContent = todos.length
+      ? todos.length+" terneros aparecen dos veces"+(nMismo?" ("+nMismo+" cargados dos veces en el mismo campo)":"")
+      : "No hay terneros repetidos, ni dentro de un campo ni entre campos";
     let html="";
     for(const g of porCampo){
       html += "<h3 class=\"s\" style=\"margin-top:14px\">"+esc(g.campo.nombre)+" <span class=\"mut\" style=\"font-weight:300;letter-spacing:0;text-transform:none\">"+g.pares.length+"</span></h3>"
-        + "<div class=\"tw\"><table><thead><tr><th>Madre</th><th>Nacimiento</th><th>Acá</th><th>En el otro campo</th><th>Queda</th><th>Por qué</th></tr></thead><tbody>"
+        + "<div class=\"tw\"><table><thead><tr><th>Madre</th><th>Nacimiento</th><th>Uno</th><th>El otro</th><th>Queda</th><th>Por qué</th></tr></thead><tbody>"
         + g.pares.slice(0,40).map(function(p){
             return "<tr><td class=\"rp\">"+esc(p.madre)+"</td><td class=\"mut\">"+(fec(p.fecha_nac)||"—")+"</td>"
               + "<td>"+esc(p.aca.rp)+(p.aca.armado?" <span class=\"mut\">(armado)</span>":"")+"</td>"
-              + "<td>"+esc(p.alla.rp)+" <span class=\"tag t-cola\">"+esc(p.alla.campo_nombre)+"</span></td>"
+              + "<td>"+esc(p.alla.rp)+(p.mismo_campo?" <span class=\"tag t-preñada\">mismo campo</span>":" <span class=\"tag t-cola\">"+esc(p.alla.campo_nombre)+"</span>")+"</td>"
               + "<td><b>"+esc(p.queda.rp)+"</b></td><td class=\"mut\">"+esc(p.porque)+"</td></tr>";
           }).join("")
         + "</tbody></table></div>";
@@ -1377,8 +1380,10 @@ async function usoBot(){
     const d=n=>"US$ "+(n||0).toFixed(2), mil=n=>(n||0).toLocaleString("es-AR");
     const nom=function(m){ return String(m||"").replace("claude-","").replace(/-/g," "); };
     const comoRutea = u.ruteo==="auto"
-      ? "Las preguntas directas y las cargas van a <b>"+esc(nom(u.modelo_simple))+"</b>; los análisis, a <b>"+esc(nom(u.modelo))+"</b>."
-      : "Ruteo fijo: todo va a <b>"+esc(nom(u.ruteo==="simple"||u.ruteo==="barato"?u.modelo_simple:u.modelo))+"</b>.";
+      ? "Reparto encendido: las consultas directas van a <b>"+esc(nom(u.modelo_simple))+"</b>, y todo lo que analiza o escribe a <b>"+esc(nom(u.modelo))+"</b>."
+      : (u.ruteo==="simple"||u.ruteo==="barato")
+        ? "Todo va a <b>"+esc(nom(u.modelo_simple))+"</b>."
+        : "Piensa <b>"+esc(nom(u.modelo))+"</b> en todo.";
     t.innerHTML = comoRutea+" Hoy: <b>"+u.hoy.consultas+"</b> consultas, <b>"+d(u.hoy.usd)+"</b>. "
       + "Este mes: <b>"+u.mes.consultas+"</b> consultas, <b>"+d(u.mes.usd)+"</b>. "
       + "Promedio por consulta: "+d(u.periodo.promedio_por_consulta)+". El caché ahorró "+d(u.periodo.ahorro_cache)+" en los últimos 30 días. "
