@@ -492,23 +492,73 @@ const eventos = [];
   const gasto = await finanzasMod.registrarMovimiento(db, { concepto: "sanidad", egreso: 300, detalle: "ivermectina", proveedor: "Diego Pioli", fecha: "2026-09-03" });
   const txg = recibido[recibido.length - 1];
   ok(gasto.ok && gasto.enviado && txg.body.concepto === "SANIDAD" && txg.body.egreso === 300 && txg.body.proveedor === "Diego Pioli" && /ivermectina/.test(txg.body.detalle) && /desde RODEO/.test(txg.body.detalle), "el gasto llega al financiero con concepto, monto, proveedor y detalle");
-  // Un financiero viejo: no tiene POST /api/transacciones, recibe por /api/ejecutar-accion.
+  // Un financiero viejo (IMPROLUX): no tiene POST /api/transacciones y recibe
+  // por /api/ejecutar-accion, con el cuerpo ANIDADO dentro de "accion". Allá la
+  // ruta hace req.body.accion y después le pide .accion a eso: plano da 400.
   const viejo = [];
+  const financieroViejo = async (urlCompleta, op) => {
+    const u = new URL(urlCompleta); const ruta = u.pathname;
+    const body = op && op.body ? JSON.parse(op.body) : null;
+    viejo.push({ ruta, body });
+    if (ruta === "/api/transacciones" && op.method === "POST") return { ok: false, status: 404, text: async () => "Cannot POST /api/transacciones" };
+    if (ruta === "/api/ejecutar-accion") {
+      const a = body && body.accion;
+      if (!a || !a.accion) return { ok: false, status: 400, text: async () => JSON.stringify({ error: "Falta la acción" }) };
+      if (!a.concepto) return { ok: true, status: 200, text: async () => JSON.stringify({ respuesta: "❌ Faltan datos para registrar." }) };
+      return { ok: true, status: 200, text: async () => JSON.stringify({ respuesta: "✅ Registrado!\n📝 maíz\n📤 Egreso: $500 USD" }) };
+    }
+    return { ok: true, status: 200, text: async () => "{}" };
+  };
+  finanzasMod.setFetch(financieroViejo);
+  const gastoViejo = await finanzasMod.registrarMovimiento(db, { concepto: "alimento", egreso: 500, detalle: "maíz" });
+  const envio = viejo.find(v => v.ruta === "/api/ejecutar-accion");
+  ok(gastoViejo.ok && envio && envio.body.accion && envio.body.accion.accion === "registrar_transaccion"
+    && envio.body.accion.egreso === 500 && envio.body.accion.concepto === "ALIMENTO", "al financiero viejo el gasto va anidado dentro de \"accion\", que es lo que sabe leer");
+  ok(viejo[0].ruta === "/api/transacciones", "primero intenta la ruta nueva");
+
+  // Si el financiero viejo contesta con ❌, no cargó nada: eso es un error, no un ok.
+  let errViejo = null;
+  const rV = await finanzasMod.registrarMovimiento(db, { concepto: " ", egreso: 10 }).catch(e => { errViejo = e.message; return null; });
+  ok(errViejo && /Falta el concepto/.test(errViejo), "sin concepto ni siquiera sale de RODEO");
+
+  // Un financiero que responde 400 "Falta la acción" a la ruta nueva también cae al fallback.
+  const viejo400 = [];
   finanzasMod.setFetch(async (urlCompleta, op) => {
     const u = new URL(urlCompleta); const ruta = u.pathname;
-    viejo.push({ ruta, body: op && op.body ? JSON.parse(op.body) : null });
-    if (ruta === "/api/transacciones" && op.method === "POST") return { ok: false, status: 404, text: async () => "Cannot POST /api/transacciones" };
-    if (ruta === "/api/ejecutar-accion") return { ok: true, status: 200, text: async () => JSON.stringify({ respuesta: "✅ Registrado!" }) };
-    return { ok: true, status: 200, text: async () => "{}" };
+    viejo400.push(ruta);
+    if (ruta === "/api/transacciones" && op.method === "POST") return { ok: false, status: 400, text: async () => JSON.stringify({ error: "Falta la acción" }) };
+    return { ok: true, status: 200, text: async () => JSON.stringify({ respuesta: "✅ Registrado!" }) };
   });
-  const gastoViejo = await finanzasMod.registrarMovimiento(db, { concepto: "alimento", egreso: 500, detalle: "maíz" });
-  ok(gastoViejo.ok && viejo.some(v => v.ruta === "/api/ejecutar-accion" && v.body.accion === "registrar_transaccion" && v.body.egreso === 500 && v.body.concepto === "ALIMENTO"), "si el financiero es viejo, el gasto entra por ejecutar-accion");
-  ok(viejo[0].ruta === "/api/transacciones", "primero intenta la ruta nueva");
+  const g400 = await finanzasMod.registrarMovimiento(db, { concepto: "combustible campo", egreso: 40 });
+  ok(g400.ok && viejo400.includes("/api/ejecutar-accion"), "si la ruta nueva contesta 400 por la acción, prueba la vieja igual");
+  finanzasMod.setFetch(financieroViejo);
   finanzasMod.setFetch(async (urlCompleta, op) => { const u = new URL(urlCompleta); const url = u.origin + u.pathname; recibido.push({ url, query: Object.fromEntries(u.searchParams), body: op && op.body ? JSON.parse(op.body) : null }); const cuerpo = url.endsWith("/api/transacciones") && op.method === "POST" ? { ok: true, id: 77 } : url.endsWith("/api/resumen") ? { ingresos_mes: 8500, egresos_mes: 400 } : {}; return { ok: true, status: 200, text: async () => JSON.stringify(cuerpo) }; });
   let errG = null; try { await finanzasMod.registrarMovimiento(db, { concepto: "SANIDAD" }); } catch (e) { errG = e.message; }
   ok(/Falta el monto/.test(errG), "sin monto no registra nada");
   const est = await finanzasMod.estado(db);
   ok(est.configurado && est.conecta && est.ultimos.length >= 2, "el estado muestra conexión y los últimos enlaces");
+
+  // ── Dos empresas con el mismo financiero: no se escribe ──
+  // La lista de campos de esos sistemas es del stock; la plata es una sola caja.
+  // Si dos razones sociales apuntan a la misma, lo que carga una entra en los
+  // libros de la otra, y eso no se arregla después.
+  const empresasMod = require("../empresas.js");
+  const antesEmp = process.env.EMPRESAS;
+  process.env.EMPRESAS = JSON.stringify({
+    uno: { nombre: "Empresa Uno", finanzas_url: "https://caja.prueba" },
+    dos: { nombre: "Empresa Dos", finanzas_url: "https://caja.prueba/" },
+    tres: { nombre: "Empresa Tres", finanzas_url: "https://otra.prueba" } });
+  const cfg = empresasMod.configurar({ c1: { nombre: "C1", empresa: "uno" }, c2: { nombre: "C2", empresa: "dos" }, c3: { nombre: "C3", empresa: "tres" } });
+  ok(cfg.uno.finanzas.compartido_con && cfg.uno.finanzas.compartido_con[0] === "Empresa Dos"
+    && cfg.dos.finanzas.compartido_con[0] === "Empresa Uno", "detecta las dos empresas que comparten financiero, aunque una tenga barra al final");
+  ok(!cfg.tres.finanzas.compartido_con, "la que tiene el suyo propio queda limpia");
+  const mezcla = await finanzasMod.registrarMovimiento(db, { concepto: "alimento", egreso: 100 }, cfg.uno.finanzas);
+  ok(!mezcla.enviado && /libros de la otra/.test(mezcla.motivo), "no manda el gasto al financiero que comparte con otra empresa, y explica por qué");
+  const ventaMezcla = await finanzasMod.enviarVenta(db, { rps: ["13"], precio_total: 900 }, cfg.uno.finanzas);
+  ok(!ventaMezcla.enviado && /libros de la otra/.test(ventaMezcla.motivo), "la venta tampoco");
+  const estMezcla = await finanzasMod.estado(db, cfg.uno.finanzas);
+  ok(estMezcla.compartido_con && /Empresa Dos/.test(estMezcla.aviso), "el estado lo avisa para que se vea en el tablero");
+  if (antesEmp === undefined) delete process.env.EMPRESAS; else process.env.EMPRESAS = antesEmp;
   const bot9 = botMod.crear({ plantelMod, animalesMod, destinosMod, exportarMod, relevarMod, guardarTablero: S.guardarTablero, CAMPOS: S.CAMPOS, finanzasMod,
     cliente: clienteFalso([
       () => ({ content: [uso("t10", "finanzas", { consulta: "resumen" })] }),
