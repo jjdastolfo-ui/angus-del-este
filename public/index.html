@@ -1423,6 +1423,12 @@ async function finanzasEstado(){
   try{
     const e=await fetch(urlCampo('/api/finanzas/estado')).then(r=>r.json());
     if(!e.configurado){ t.innerHTML='No está configurado. En Railway, agregá <b>FINANZAS_URL</b> con la dirección de IMPROLUX (y en IMPROLUX, <b>ADE_URL</b> con la dirección de esta app). Igual, el financiero ya puede leer el stock en /api/rodeo-resumen.'; return; }
+    if(e.compartido_con){
+      t.innerHTML = '<span class="tag t-error">plata mezclada</span> '+esc(e.aviso||'')
+        + ' Por ahora no se manda nada: lo del campo se carga igual.';
+      document.getElementById('finUltimos').innerHTML='';
+      return;
+    }
     t.innerHTML = e.conecta ? `Conectado a <b>${esc(e.url)}</b>${e.campo?' · campo '+esc(e.campo):''}. Este mes según el financiero: ingresos ${Math.round(e.resumen.ingresos_mes||0).toLocaleString('es-AR')}, egresos ${Math.round(e.resumen.egresos_mes||0).toLocaleString('es-AR')}.` : `Configurado (${esc(e.url)}) pero no responde: ${esc(e.error||'')}`;
     const u=e.ultimos||[]; document.getElementById('finUltimos').innerHTML = u.length ? `<div class="lista" style="margin-top:10px">${u.slice(0,8).map(x=>`<div class="it"><span class="tag ${x.ok?'t-ok':'t-error'}">${esc(x.direccion)}</span><b>${esc(x.que)}</b><span class="d">${esc(x.detalle||'')}</span><span class="mut" style="font-size:11px">${fec(String(x.created_at).slice(0,10))} ${String(x.created_at).slice(11,16)}</span></div>`).join('')}</div>` : '';
   }catch(err){ t.textContent='No pude consultar el estado: '+err.message; }
