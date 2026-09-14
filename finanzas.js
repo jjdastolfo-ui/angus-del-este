@@ -6,7 +6,10 @@
 //      patrimonio: GET /api/rodeo-resumen. Sale con la cantidad en plantel, la
 //      cantidad marcada para venta y los kilos promedio reales de cada categoría.
 //   2. Cuando en RODEO se registra una venta (salida con precio), se le manda
-//      la transacción al financiero: POST {FINANZAS_URL}/api/transacciones.
+//      la transacción al financiero. Hay dos generaciones: los nuevos (VIDELA)
+//      reciben POST /api/transacciones; los viejos (IMPROLUX) sólo tienen
+//      POST /api/ejecutar-accion, y ahí el cuerpo va anidado dentro de "accion".
+//      Ver enviarTransaccion: se intenta la nueva y se cae a la vieja sola.
 //   3. El bot de RODEO puede leer el financiero (resumen, transacciones, stock
 //      valuado) para contestar preguntas de plata.
 //
@@ -39,6 +42,11 @@ const config = fin => fin && (fin.url || fin.campo || fin.clave) ? { url: String
   clave: process.env.FINANZAS_CLAVE || null
 });
 const configurado = fin => !!config(fin).url;
+
+// Si otra empresa apunta al mismo financiero, escribir ahí le mete la plata de
+// una en los libros de la otra. Mejor no cargar nada y decirlo.
+const compartido = fin => (fin && Array.isArray(fin.compartido_con) && fin.compartido_con.length) ? fin.compartido_con : null;
+const motivoCompartido = fin => `Este financiero es el mismo que usa ${compartido(fin).join(" y ")}: cargar acá le mete la plata de una empresa en los libros de la otra. No lo mando. Hay que darle a esta empresa su propio sistema (FINANZAS_URL propia en EMPRESAS), o dejarla sin enlazar.`;
 
 function anotar(db, direccion, que, detalle, ok, respuesta) {
   try { db.prepare("INSERT INTO enlaces (direccion, que, detalle, ok, respuesta) VALUES (?,?,?,?,?)").run(direccion, que, detalle || null, ok ? 1 : 0, typeof respuesta === "string" ? respuesta.slice(0, 2000) : JSON.stringify(respuesta || null).slice(0, 2000)); } catch (e) {}
@@ -95,17 +103,27 @@ function resumenRodeo(db, { campoKey, campoNombre, destinosMod } = {}) {
       kg_total: categorias.reduce((s, c) => s + (c.kg_total || 0), 0) } };
 }
 
-// Cargar una transacción. Los financieros nuevos tienen POST /api/transacciones;
-// los viejos reciben lo mismo por /api/ejecutar-accion con la acción
-// "registrar_transaccion". Se intenta la primera y, si esa ruta no existe, la otra.
+// Cargar una transacción. Hay dos generaciones de financiero:
+//
+//   nuevo   POST /api/transacciones con la transacción en el cuerpo (VIDELA).
+//   viejo   POST /api/ejecutar-accion, y el cuerpo va ANIDADO dentro de "accion"
+//           (IMPROLUX). Allá la ruta hace `req.body.accion` y después le pide
+//           `.accion` a eso, así que mandarlo plano —{accion:"registrar_..."}—
+//           devuelve 400 "Falta la acción" y el gasto se pierde en silencio.
+//
+// Se intenta la primera y, si no está o no la entiende, la otra.
 async function enviarTransaccion(cuerpo, fin) {
   try { return await llamar("/api/transacciones", { method: "POST", body: JSON.stringify(cuerpo) }, fin); }
   catch (e) {
-    if (!/respondió 404/.test(e.message)) throw e;
+    // 404: la ruta no existe. 400 "falta la acción": existe otra que espera acciones.
+    if (!/respondió 404/.test(e.message) && !/respondió 40\d[^]*acci[oó]n/i.test(e.message)) throw e;
     const r = await llamar("/api/ejecutar-accion", { method: "POST", body: JSON.stringify({
-      accion: "registrar_transaccion", fecha: cuerpo.fecha, concepto: cuerpo.concepto, detalle: cuerpo.detalle,
-      ingreso: cuerpo.ingreso || 0, egreso: cuerpo.egreso || 0, proveedor: cuerpo.proveedor || "" }) }, fin);
-    if (r && typeof r.respuesta === "string" && /❌|no pude|falta/i.test(r.respuesta)) throw new Error(r.respuesta.replace(/[❌📝📤📥📁🏪]/g, "").trim());
+      accion: {
+        accion: "registrar_transaccion", fecha: cuerpo.fecha, concepto: cuerpo.concepto, detalle: cuerpo.detalle,
+        ingreso: cuerpo.ingreso || 0, egreso: cuerpo.egreso || 0, proveedor: cuerpo.proveedor || ""
+      } }) }, fin);
+    // Contesta en texto con emojis: si empieza con ❌, no cargó nada.
+    if (r && typeof r.respuesta === "string" && /❌|no pude|faltan? /i.test(r.respuesta)) throw new Error(r.respuesta.replace(/[❌📝📤📥📁🏪✅💰📊💡⚠️]/g, "").trim());
     return { ...r, via: "ejecutar-accion" };
   }
 }
@@ -125,6 +143,7 @@ async function enviarVenta(db, venta, fin) {
   const queSeVende = cats.map(c => `${c.n} ${String(c.categoria || "animal").toLowerCase()}${c.n === 1 ? "" : c.categoria && /A$/.test(c.categoria) ? "s" : "s"}`).join(", ");
   const texto = detalle || `Venta ${queSeVende} (RP ${rps.join(", ")})${venta.kg ? ` · ${venta.kg} kg` : ""}${comprador ? ` · ${comprador}` : ""} · desde RODEO`;
   if (!configurado(fin)) { anotar(db, "enviado", "venta", texto, false, "sin FINANZAS_URL"); return { ok: false, enviado: false, motivo: "El financiero no está enlazado (FINANZAS_URL o EMPRESAS)", detalle: texto }; }
+  if (compartido(fin)) { anotar(db, "enviado", "venta", texto, false, "financiero compartido con otra empresa"); return { ok: false, enviado: false, motivo: motivoCompartido(fin), detalle: texto }; }
   if (!(total > 0)) { anotar(db, "enviado", "venta", texto, false, "sin precio"); return { ok: false, enviado: false, motivo: "Sin precio: no se manda al financiero", detalle: texto }; }
   const cuerpo = { fecha: fecha || new Date().toISOString().slice(0, 10), concepto: venta.concepto || "VENTA HACIENDA", detalle: texto,
     ingreso: total, proveedor: comprador || "", fuente: "rodeo", campo: config(fin).campo || undefined };
@@ -154,6 +173,7 @@ async function registrarMovimiento(db, m, fin) {
     proveedor: m.proveedor || "", es_cc: m.es_cc ? 1 : 0, fuente: "rodeo", campo: config(fin).campo || undefined };
   if (m.simular) return { simulado: true, enviado: false, movimiento: cuerpo, mensaje: `Listo para registrar: ${concepto} ${egreso > 0 ? "gasto" : "ingreso"} ${egreso || ingreso}${m.proveedor ? " · " + m.proveedor : ""}. Confirmá y lo mando.` };
   if (!configurado(fin)) { anotar(db, "enviado", "movimiento", cuerpo.detalle, false, "sin financiero"); return { ok: false, enviado: false, motivo: "El financiero no está enlazado para esta empresa" }; }
+  if (compartido(fin)) { anotar(db, "enviado", "movimiento", `${concepto} ${egreso || ingreso}`, false, "financiero compartido con otra empresa"); return { ok: false, enviado: false, motivo: motivoCompartido(fin), movimiento: cuerpo }; }
   try {
     const r = await enviarTransaccion(cuerpo, fin);
     anotar(db, "enviado", "movimiento", `${concepto} ${egreso || ingreso}`, true, r);
@@ -196,7 +216,8 @@ async function consultar(db, { consulta = "resumen", desde, hasta, concepto, tex
 async function estado(db, fin) {
   const c = config(fin);
   const ultimos = (() => { try { return db.prepare("SELECT direccion, que, detalle, ok, respuesta, created_at FROM enlaces ORDER BY id DESC LIMIT 20").all(); } catch (e) { return []; } })();
-  const out = { configurado: !!c.url, url: c.url || null, campo: c.campo, con_clave: !!c.clave, ultimos };
+  const out = { configurado: !!c.url, url: c.url || null, campo: c.campo, con_clave: !!c.clave,
+    compartido_con: compartido(fin), aviso: compartido(fin) ? motivoCompartido(fin) : null, ultimos };
   if (c.url) {
     try { const r = await llamar("/api/resumen", { timeout: 8000 }, fin); out.conecta = true; out.resumen = r; }
     catch (e) { out.conecta = false; out.error = e.message; }

@@ -326,7 +326,12 @@ const HERRAMIENTAS = [
       "escribir, mirá con finanzas qué conceptos se usan en esa empresa y elegí uno de ésos. Mostrale al " +
       "usuario qué vas a registrar (simular=true) y mandalo cuando confirme.",
     input_schema: { type: "object", properties: {
-      concepto: { type: "string", description: "El concepto tal como se usa en el financiero: SANIDAD, ALIMENTO, COMBUSTIBLE, PERSONAL, FLETE…" },
+      concepto: { type: "string", description: "La categoría tal cual la usa ese financiero, en mayúsculas. No la inventes ni la traduzcas: " +
+        "si no estás seguro, mirá antes con finanzas (consulta=transacciones) cuáles vienen usando. En IMPROLUX y VIDELA son, por ejemplo, " +
+        "INSUMOS VETERINARIOS, TRABAJOS VETERINARIOS, ALIMENTACION CRIA, ALIMENTACION RECRIA, TERMINACION, COMBUSTIBLE CAMPO, COMBUSTIBLE VIATICOS, " +
+        "SUELDO JORNAL, SUELDO ENCARGADO, SUELDO ADM, VERDEOS Y PASTURAS, ESTRUCTURA GANADERA, MANTENIMIENTO CAMPO, MANTENIMIENTO MAQUINARIA, " +
+        "GASTOS VENTAS GANADERAS, INVERSION MAQUINARIA, COMPRA GANADO, COMPRA HERRAMIENTAS, ALQUILER, BPS, GASTOS ADM, PROVISTA, VEHICULOS, " +
+        "TELEFONO, INTERESES, GASTO BANCARIO, OTROS. Una categoría mal escrita entra igual y después no suma en ningún informe." },
       egreso: { type: "number", description: "Monto del gasto, en la moneda del financiero." },
       ingreso: { type: "number", description: "Monto del ingreso, si es una entrada de plata." },
       detalle: { type: "string", description: "Qué fue, en una línea." },

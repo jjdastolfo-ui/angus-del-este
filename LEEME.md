@@ -343,6 +343,32 @@ Tres flujos, todos en `finanzas.js`:
 3. **El bot lee el financiero.** Herramienta `finanzas`: resumen del mes,
    transacciones por concepto y fecha, stock valuado, cuentas, cheques. Así
    contesta "cuánto gastamos en sanidad este ciclo" cruzando con el rodeo.
+4. **Los gastos se cargan desde acá.** Herramienta `finanzas_registrar`: "compré
+   10 frascos de ivermectina, 300 dólares, a Diego Pioli" entra como transacción.
+
+**Dos generaciones de financiero, y no hablan igual.** VIDELA tiene
+`POST /api/transacciones` y recibe la transacción en el cuerpo. IMPROLUX es
+anterior: sólo tiene `POST /api/ejecutar-accion`, y ahí adentro hace
+`req.body.accion` y después le pide `.accion` a eso — o sea que el cuerpo tiene
+que ir **anidado**:
+
+```json
+{ "accion": { "accion": "registrar_transaccion", "fecha": "2026-09-14",
+              "concepto": "INSUMOS VETERINARIOS", "detalle": "…",
+              "ingreso": 0, "egreso": 55, "proveedor": "…" } }
+```
+
+Mandado plano contesta `400 {"error":"Falta la acción"}` y el gasto se pierde.
+`enviarTransaccion` intenta la ruta nueva y cae sola a la vieja, con el cuerpo
+anidado, tanto si la nueva da 404 como si da 400 quejándose de la acción. El
+financiero viejo contesta en texto con emojis: si empieza con ❌ no cargó nada,
+y eso vuelve como error, no como éxito.
+
+**La categoría importa.** El financiero acepta cualquier texto en `concepto`,
+así que una mal escrita entra igual y después no suma en ningún informe
+("GASTOS ADMINISTRATIVOS" no es "GASTOS ADM"). El bot tiene la lista de las que
+usan IMPROLUX y VIDELA, y puede mirar con `finanzas consulta=transacciones`
+cuáles vienen usando de verdad.
 
 Variables en Railway (en RODEO): `FINANZAS_URL` (la dirección del financiero),
 `FINANZAS_CAMPO` (cómo se llama este campo allá, ej. `AMAKAIK`), `FINANZAS_CLAVE`

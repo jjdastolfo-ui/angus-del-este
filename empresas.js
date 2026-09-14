@@ -37,6 +37,23 @@ function configurar(CAMPOS) {
       campos: Object.entries(CAMPOS).filter(([, c]) => (c.empresa || [...claves][0]) === k).map(([key, c]) => ({ key, nombre: c.nombre }))
     };
   }
+  // Dos empresas apuntando al mismo financiero comparten la caja: lo que cargue
+  // una entra en los libros de la otra, porque esos sistemas tienen un solo
+  // flujo de fondos (la lista de campos es del stock, no de la plata). Se marca
+  // acá y no se escribe: mezclar la plata de dos razones sociales no se arregla
+  // después.
+  const porUrl = new Map();
+  for (const emp of Object.values(empresas)) {
+    if (!emp.finanzas.url) continue;
+    const k = emp.finanzas.url.toLowerCase();
+    if (!porUrl.has(k)) porUrl.set(k, []);
+    porUrl.get(k).push(emp);
+  }
+  for (const lista of porUrl.values()) {
+    if (lista.length < 2) continue;
+    for (const emp of lista) emp.finanzas.compartido_con = lista.filter(o => o.key !== emp.key).map(o => o.nombre);
+  }
+
   // Un campo sin empresa va a la primera.
   const primera = Object.keys(empresas)[0];
   for (const [key, c] of Object.entries(CAMPOS)) if (!c.empresa) { c.empresa = primera; if (!empresas[primera].campos.some(x => x.key === key)) empresas[primera].campos.push({ key, nombre: c.nombre }); }
@@ -72,7 +89,7 @@ function crear({ CAMPOS, getDB, plantelMod, animalesMod, destinosMod, finanzasMo
       } catch (err) { return { key: c.key, nombre: c.nombre, ok: false, error: err.message }; }
     });
     const suma = k => campos.filter(c => c.ok).reduce((s, c) => s + (Number(c[k]) || 0), 0);
-    return { empresa: e.key, nombre: e.nombre, razon_social: e.razon_social, campos, finanzas: { nombre: e.finanzas.nombre, configurado: !!e.finanzas.url, url: e.finanzas.url || null, campo: e.finanzas.campo },
+    return { empresa: e.key, nombre: e.nombre, razon_social: e.razon_social, campos, finanzas: { nombre: e.finanzas.nombre, configurado: !!e.finanzas.url, url: e.finanzas.url || null, campo: e.finanzas.campo, compartido_con: e.finanzas.compartido_con || null },
       totales: { campos: campos.length, cabezas: suma("cabezas"), vientres: suma("vientres"), prenadas: suma("prenadas"), criando: suma("criando"),
         fallaron: suma("fallaron"), toros: suma("toros"), terminando: suma("terminando"), marcados_salida: suma("marcados_salida") } };
   }
