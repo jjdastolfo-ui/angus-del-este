@@ -7980,8 +7980,16 @@ app.post("/api/informe-inia/servicio", async (req, res) => {
 });
 
 // ── MÓDULO COSTEO kgNE ────────────────────────────────────────────────────────
-const costeo = require("./costeo");
-const motoresCosteo = costeo.init(databases, app, { CAMPO_DEFAULT });
+// Como el resto de los módulos: si falta el archivo, el sistema arranca igual
+// y pierde sólo el costeo. Sin esto, un módulo ausente tumba el server entero
+// y deja de responder todo, incluido WhatsApp.
+let costeo, motoresCosteo;
+try {
+  costeo = require("./costeo");
+  motoresCosteo = costeo.init(databases, app, { CAMPO_DEFAULT });
+} catch (e) {
+  console.log("costeo no disponible:", e.message);
+}
 
 const PORT = process.env.PORT || 3001;
 // ── TEMPORAL: copiar la base a otro servidor ─────────────────────────────────
@@ -8046,7 +8054,7 @@ app.listen(PORT, () => {
     if (ahora.getUTCHours() !== 12 || ahora.getUTCMinutes() >= 5) return;
     for (const [campoKey] of Object.entries(databases)) {
       try {
-        const m = motoresCosteo[campoKey];
+        const m = motoresCosteo && motoresCosteo[campoKey];
         if (!m || !m.precios()) continue;
         const r = m.sincronizar({});
         const partes = [];
