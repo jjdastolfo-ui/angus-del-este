@@ -379,6 +379,25 @@ const HERRAMIENTAS = [
       },
       required: ["accion"]
     }
+  },
+  {
+    name: "finanzas_consultar",
+    description: "Lee la base del sistema financiero con SQL, igual que consultar hace con la del campo. Es lo que te " +
+      "deja contestar cualquier pregunta de plata: cuánto le debemos a un proveedor y desde cuándo, qué cheques " +
+      "vencen el mes que viene, cuánto se gastó en sanidad por mes, qué proveedor subió más de precio, qué pasó " +
+      "con una factura.\n\n" +
+      "LLAMALA PRIMERO SIN SQL: así te devuelve el esquema de ESE financiero y sus categorías de gasto. No son " +
+      "iguales entre empresas — VIDELA lleva los montos también en kg de carne, en columnas aparte, y sus " +
+      "presupuestos están en kg. No adivines nombres de tabla ni de categoría: pedí el esquema y después consultá.\n\n" +
+      "Sólo SELECT. Para cambiar algo usá finanzas_accion. Si necesitás cruzar plata con hacienda (cuánto costó " +
+      "cada ternero destetado, cuánto rindió un lote), consultá los dos lados y hacé la cuenta vos.",
+    input_schema: {
+      type: "object",
+      properties: {
+        sql: { type: "string", description: "Un SELECT sobre la base del financiero. Sin esto, devuelve el esquema y las categorías." },
+        porque: { type: "string", description: "Qué estás tratando de averiguar." }
+      }
+    }
   }
 ];
 
@@ -531,6 +550,10 @@ QUÉ HERRAMIENTA PARA QUÉ:
 · finanzas: el sistema financiero de la empresa, si está enlazado: gastos por concepto, ventas, stock valuado, cuentas, cheques.
 · finanzas_registrar: cargar un gasto o un ingreso ahí. Las ventas de hacienda NO: ésas van por destinar salida con el precio, y se mandan solas.
 · finanzas_accion: todo el resto del financiero — cheques de terceros, cuentas corrientes, inversores, dividendos, presupuestos, insumos con stock, laboreos. El repertorio está más abajo.
+· finanzas_consultar: SQL sobre la base del financiero, para cualquier pregunta de plata que las consultas fijas no cubran. Llamala sin sql la primera vez para que te dé el esquema y las categorías de esa empresa.
+
+SOS EL ÚNICO BOT: no hay otro al que derivar lo de plata. Lo que antes contestaba el bot del financiero lo contestás vos, con las mismas tres cosas que tenía él: leer su base con SQL (finanzas_consultar), ejecutar cualquiera de sus acciones (finanzas_accion), y conocer sus categorías. La diferencia es que vos además ves el campo, así que podés cruzar las dos cosas: cuánto costó cada ternero destetado, cuánto rindió un lote, qué gastamos por cabeza. Nadie más puede hacer eso.
+Antes de registrar un gasto, mirá qué conceptos viene usando esa empresa y elegí uno de ésos: una categoría mal escrita entra igual y después no suma en ningún informe.
 
 ATENDÉS LAS DOS COSAS: lo del campo (animales, pesadas, sanidad aplicada, nacimientos) va a la base ganadera; lo de plata (cuánto se gastó, qué se compró, cuánto entró) va al financiero de esta empresa. Un mismo hecho puede ser las dos: "vacuné 80 vacas con ivermectina que compré a 300 dólares" es una aplicación de sanidad (relevar) y un gasto (finanzas_registrar). Hacé las dos y contá las dos. Si el financiero no está enlazado, decilo y cargá igual lo del campo.
 · campos: la empresa entera, campo por campo, cuando preguntan por el total o comparan campos.
@@ -687,6 +710,12 @@ ${cal.cortes ? `Bloques de la parición en curso: cabeza hasta ${cal.cortes.CABE
         if (ctx.soloLectura && !input.simular) throw new Error("Esta sesión es de sólo lectura");
         const em = empresasDe();
         return finanzasMod.registrarMovimiento(db, input, em && ctx.campoKey ? em.finanzasDe(ctx.campoKey) : undefined);
+      }
+      case "finanzas_consultar": {
+        const em = empresasDe();
+        const fin = em && ctx.campoKey ? em.finanzasDe(ctx.campoKey) : undefined;
+        if (!finanzasMod.consultarSQL) throw new Error("Este finanzas.js todavía no tiene la lectura con SQL del financiero: hay que actualizarlo.");
+        return finanzasMod.consultarSQL(db, { sql: input.sql }, fin);
       }
       case "finanzas_accion": {
         if (ctx.soloLectura && !input.simular) throw new Error("Esta sesión es de sólo lectura");

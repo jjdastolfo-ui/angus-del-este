@@ -246,6 +246,30 @@ async function ejecutar(db, accion, fin, opciones = {}) {
   }
 }
 
+/**
+ * Lee la base del financiero con SQL, como lo hace su propio bot.
+ * Sin sql devuelve el esquema y las categorías: eso es lo primero que hay que
+ * pedir, porque cada financiero tiene tablas distintas (VIDELA lleva kg de
+ * carne en columnas aparte, IMPROLUX no).
+ */
+async function consultarSQL(db, { sql } = {}, fin) {
+  if (!configurado(fin)) return { ok: false, motivo: "El financiero no está enlazado para esta empresa" };
+  try {
+    const r = await llamar("/api/consultar", { method: "POST", body: JSON.stringify(sql ? { sql } : {}) }, fin);
+    if (!sql) { anotar(db, "consulta", "esquema", null, true, `${JSON.stringify(r).length} bytes`); return { ok: true, ...r }; }
+    anotar(db, "consulta", "sql", String(sql).slice(0, 300), true, `${(r && r.filas ? r.filas.length : 0)} filas`);
+    return { ok: true, ...r };
+  } catch (e) {
+    // Un financiero viejo no tiene la ruta: hay que actualizarlo.
+    if (/respondió 404/.test(e.message)) {
+      anotar(db, "consulta", "sql", String(sql || "").slice(0, 300), false, "sin /api/consultar");
+      return { ok: false, motivo: "Este financiero todavía no tiene la lectura abierta (/api/consultar): hay que actualizarle el server. Mientras tanto, usá la herramienta finanzas con sus consultas fijas." };
+    }
+    anotar(db, "consulta", "sql", String(sql || "").slice(0, 300), false, e.message);
+    return { ok: false, motivo: e.message };
+  }
+}
+
 // El catálogo de reserva, para un financiero que todavía no tenga /api/acciones.
 // La versión que manda es la que devuelve el financiero.
 const ACCIONES_FINANCIERO = `Acciones del sistema financiero. Se mandan con la herramienta del financiero, un objeto por acción.
@@ -347,4 +371,4 @@ async function pedirSincronizacion(db, campoKey, fin, todosLosCampos) {
   return r;
 }
 
-module.exports = { init, config, configurado, resumenRodeo, enviarVenta, registrarMovimiento, enviarTransaccion, consultar, estado, pedirSincronizacion, setFetch, llamar, ejecutar, acciones, ACCIONES_FINANCIERO };
+module.exports = { init, config, configurado, resumenRodeo, enviarVenta, registrarMovimiento, enviarTransaccion, consultar, estado, pedirSincronizacion, setFetch, llamar, ejecutar, acciones, consultarSQL, ACCIONES_FINANCIERO };
