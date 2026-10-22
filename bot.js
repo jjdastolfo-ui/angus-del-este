@@ -354,6 +354,31 @@ const HERRAMIENTAS = [
         olvidar_id: { type: "integer", description: "Id de una memoria a borrar." }
       }
     }
+  },
+  // Va última a propósito: el orden de esta lista es parte del caché del prompt,
+  // así que lo nuevo se agrega al final y no en el medio.
+  {
+    name: "finanzas_accion",
+    description: "Ejecuta CUALQUIER otra cosa en el sistema financiero de la empresa, más allá de leer (finanzas) " +
+      "y de cargar un gasto o un ingreso (finanzas_registrar): cheques de terceros, cuentas corrientes, " +
+      "inversores, dividendos, presupuestos, compras de insumo con stock, laboreos, informes. Pasale la acción " +
+      "tal cual la espera el financiero. El repertorio completo está en el prompt, en ACCIONES DEL FINANCIERO: " +
+      "usá una de ésas con el nombre exacto, no inventes acciones ni campos.\n\n" +
+      "Para lo que ya tiene herramienta propia, usá la herramienta: leer va por finanzas, y un gasto o un ingreso " +
+      "suelto por finanzas_registrar. Una venta de hacienda va por destinar con accion=salida y el precio, que se " +
+      "manda sola.\n\n" +
+      "Antes de escribir algo que mueva plata, mostrale al usuario qué vas a hacer con simular=true y mandalo " +
+      "cuando confirme. Si el financiero contesta con un error, contalo tal cual: no lo reintentes cambiándole " +
+      "los campos.",
+    input_schema: {
+      type: "object",
+      properties: {
+        accion: { type: "object", description:
+          "La acción completa, con su campo 'accion' adentro. Ej: {\"accion\":\"endosar_cheque\",\"cheque\":\"00012345\",\"entregado_a\":\"Diego Pioli\"}." },
+        simular: { type: "boolean", description: "true: mostrar qué se mandaría, sin escribir nada." }
+      },
+      required: ["accion"]
+    }
   }
 ];
 
@@ -505,6 +530,7 @@ QUÉ HERRAMIENTA PARA QUÉ:
 · recordar: lo que el usuario te enseña del campo y va a servir siempre.
 · finanzas: el sistema financiero de la empresa, si está enlazado: gastos por concepto, ventas, stock valuado, cuentas, cheques.
 · finanzas_registrar: cargar un gasto o un ingreso ahí. Las ventas de hacienda NO: ésas van por destinar salida con el precio, y se mandan solas.
+· finanzas_accion: todo el resto del financiero — cheques de terceros, cuentas corrientes, inversores, dividendos, presupuestos, insumos con stock, laboreos. El repertorio está más abajo.
 
 ATENDÉS LAS DOS COSAS: lo del campo (animales, pesadas, sanidad aplicada, nacimientos) va a la base ganadera; lo de plata (cuánto se gastó, qué se compró, cuánto entró) va al financiero de esta empresa. Un mismo hecho puede ser las dos: "vacuné 80 vacas con ivermectina que compré a 300 dólares" es una aplicación de sanidad (relevar) y un gasto (finanzas_registrar). Hacé las dos y contá las dos. Si el financiero no está enlazado, decilo y cargá igual lo del campo.
 · campos: la empresa entera, campo por campo, cuando preguntan por el total o comparan campos.
@@ -549,6 +575,16 @@ CÓMO TRABAJAR:
 ARMAR TABLEROS: consultá los datos primero y ponelos ya calculados adentro. Mandá sólo el contenido; el sistema pone estilos y encabezado. Después decile en qué URL quedó y qué muestra.
 
 ARCHIVOS: devolvé el link tal cual te lo da la herramienta (empieza con /archivos/). Para subconjuntos, consultá primero y mandá los RP en rps, o directamente el SELECT con columnas legibles.
+
+CHEQUES DE TERCEROS — se cobra con cheques y echeqs, y esos mismos cheques se usan después para pagar. Un cheque NO es un movimiento: es un instrumento de cobro que circula.
+· Mientras está en cartera no movió el flujo. Nadie cobró nada todavía.
+· El flujo se mueve de dos maneras: cuando el banco lo acredita, o cuando se endosa a un tercero. Endosar es cobrarlo y pagarlo en el mismo acto, así que quedan registradas las dos patas con la misma fecha y el mismo monto, y la caja no se mueve.
+· Si el endoso paga una cuenta corriente, el gasto ya se había registrado con la compra: el egreso va como PAGO CUENTA CORRIENTE y se le descuenta la deuda al proveedor. El gasto no se cuenta dos veces.
+· Los kg de carne de una venta se reconocen cuando el cheque se cobra o se endosa, nunca cuando entra a cartera.
+· Si te cuentan que pagaron o cobraron con un cheque y no sabés cuál es, buscalo (buscar_cheque o ver_cartera) antes de preguntar.
+
+ACCIONES DEL FINANCIERO (para finanzas_accion). Usá el nombre exacto y sólo los campos que figuran acá:
+${finanzasMod.ACCIONES_FINANCIERO || "(este finanzas.js no trae el repertorio: sólo se puede leer y registrar movimientos)"}
 
 ${destinosMod ? destinosMod.INSTRUCCIONES + "\n" : ""}
 CÓMO HABLAR: como un asesor que conoce el campo. Frases cortas, sin listas de más, sin repetir la pregunta. Números concretos. Español rioplatense. Si la respuesta es larga, lo importante primero.
@@ -651,6 +687,13 @@ ${cal.cortes ? `Bloques de la parición en curso: cabeza hasta ${cal.cortes.CABE
         if (ctx.soloLectura && !input.simular) throw new Error("Esta sesión es de sólo lectura");
         const em = empresasDe();
         return finanzasMod.registrarMovimiento(db, input, em && ctx.campoKey ? em.finanzasDe(ctx.campoKey) : undefined);
+      }
+      case "finanzas_accion": {
+        if (ctx.soloLectura && !input.simular) throw new Error("Esta sesión es de sólo lectura");
+        const em = empresasDe();
+        const fin = em && ctx.campoKey ? em.finanzasDe(ctx.campoKey) : undefined;
+        if (!finanzasMod.ejecutar) throw new Error("Este finanzas.js todavía no tiene el paso a acciones del financiero: hay que actualizarlo.");
+        return finanzasMod.ejecutar(db, input.accion, fin, { simular: input.simular });
       }
       case "campos": {
         const em = empresasDe(); if (!em) throw new Error("No hay empresas configuradas");

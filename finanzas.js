@@ -271,6 +271,11 @@ CHEQUES DE TERCEROS — un cheque es un instrumento de cobro que circula; en car
 {"accion":"nuevo_cheque","fecha_emision":"","fecha_cobro":"","tipo":"EMITIDO","proveedor":"","monto":0,"banco":"","concepto":""}  // cheques PROPIOS que emitimos
 {"accion":"marcar_cheque_cobrado","id":0} · {"accion":"ver_cheques"}
 
+EVENTOS DEL CAMPO — lluvias, heladas, trabajos, visitas, problemas. Van al diario del campo.
+{"accion":"anotar_evento","texto":"lo que pasó","tipo":"LLUVIA|HELADA|GRANIZO|VIENTO|SECA|TRABAJO|PASTURA|SANIDAD|VISITA|PROBLEMA","mm":0,"fecha":"YYYY-MM-DD","lugar":""}
+{"accion":"ver_eventos"}
+// El tipo y los milímetros se deducen del texto. La lluvia se acumula y la respuesta dice cuánto va en el mes.
+
 INVERSORES — el capital entra como ingreso de caja; el pago sale con los intereses y cierra al inversor.
 {"accion":"nuevo_inversor","inversor":"","capital":0,"tasa":0.08,"notas":""}
 {"accion":"pago_inversor","inversor":"","fecha":"YYYY-MM-DD"}   // devolucion_inversor hace lo mismo
