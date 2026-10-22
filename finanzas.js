@@ -184,6 +184,115 @@ async function registrarMovimiento(db, m, fin) {
   }
 }
 
+// ── 2c. CUALQUIER OTRA COSA DEL FINANCIERO ───────────────────────────────────
+//
+// Antes había una función por cosa: enviarVenta, registrarMovimiento. Eso deja
+// afuera todo lo demás que el financiero sabe hacer — cheques, cuentas
+// corrientes, inversores, presupuestos, laboreos — y obliga a escribir una
+// función nueva cada vez. El financiero ya tiene UNA puerta que ejecuta
+// cualquiera de sus acciones: POST /api/ejecutar-accion. Esto es esa puerta.
+//
+// El bot de RODEO arma la acción y la manda; no hay una lista de funciones que
+// mantener acá al día.
+
+/** Lo que el financiero sabe hacer. Se le pregunta a él; si no sabe contestar,
+ *  se usa el catálogo de abajo. Se guarda en memoria para no preguntar siempre. */
+const _catalogos = new Map();
+async function acciones(fin) {
+  const url = config(fin).url;
+  if (!url) return ACCIONES_FINANCIERO;
+  if (_catalogos.has(url)) return _catalogos.get(url);
+  let cat = ACCIONES_FINANCIERO;
+  try {
+    const r = await llamar("/api/acciones", { timeout: 8000 }, fin);
+    const texto = typeof r === "string" ? r : (r && (r.acciones || r.catalogo));
+    if (texto && String(texto).length > 50) cat = String(texto);
+  } catch (e) { /* financiero viejo: queda el catálogo local */ }
+  _catalogos.set(url, cat);
+  return cat;
+}
+
+/**
+ * Ejecuta en el financiero cualquier acción de su repertorio.
+ * `accion` es el objeto tal cual lo espera allá: { accion: "...", ...campos }.
+ * Con simular=true devuelve lo que mandaría sin escribir nada.
+ */
+async function ejecutar(db, accion, fin, opciones = {}) {
+  const nombre = accion && accion.accion ? String(accion.accion) : null;
+  if (!nombre) return { ok: false, motivo: "Falta el nombre de la acción (el campo 'accion')." };
+
+  // Las lecturas no escriben nada, así que no las frena ninguna guarda.
+  const soloLee = /^(ver_|resumen|informe|buscar_)/.test(nombre);
+  const resumido = `${nombre}${accion.monto ? " " + accion.monto : ""}${accion.proveedor ? " · " + accion.proveedor : ""}`;
+
+  if (opciones.simular) return { simulado: true, enviado: false, accion, mensaje: `Listo para mandar al financiero: ${resumido}. Confirmá y lo ejecuto.` };
+  if (!configurado(fin)) { anotar(db, "enviado", nombre, resumido, false, "sin financiero"); return { ok: false, enviado: false, motivo: "El financiero no está enlazado para esta empresa" }; }
+  // La plata de una empresa no entra en los libros de la otra.
+  if (!soloLee && compartido(fin)) { anotar(db, "enviado", nombre, resumido, false, "financiero compartido"); return { ok: false, enviado: false, motivo: motivoCompartido(fin), accion }; }
+
+  try {
+    const r = await llamar("/api/ejecutar-accion", { method: "POST", body: JSON.stringify({ accion }) }, fin);
+    // Contesta en texto con emojis. Si empieza con ❌ no hizo nada, aunque el HTTP sea 200.
+    const texto = r && typeof r.respuesta === "string" ? r.respuesta : (typeof r === "string" ? r : null);
+    if (texto && /^\s*❌/.test(texto)) {
+      anotar(db, "enviado", nombre, resumido, false, texto);
+      return { ok: false, enviado: false, motivo: texto.replace(/^\s*❌\s*/, ""), accion };
+    }
+    anotar(db, "enviado", nombre, resumido, true, r);
+    return { ok: true, enviado: true, respuesta: texto || r, accion };
+  } catch (e) {
+    anotar(db, "enviado", nombre, resumido, false, e.message);
+    return { ok: false, enviado: false, motivo: e.message, accion };
+  }
+}
+
+// El catálogo de reserva, para un financiero que todavía no tenga /api/acciones.
+// La versión que manda es la que devuelve el financiero.
+const ACCIONES_FINANCIERO = `Acciones del sistema financiero. Se mandan con la herramienta del financiero, un objeto por acción.
+
+MOVIMIENTOS
+{"accion":"registrar_transaccion","fecha":"YYYY-MM-DD","concepto":"CATEGORIA","detalle":"","ingreso":0,"egreso":0,"proveedor":""}
+{"accion":"editar_transaccion","id":0,"concepto":"","detalle":"","ingreso":0,"egreso":0}
+{"accion":"borrar_transaccion","id":0}   // anular_transaccion hace lo mismo
+{"accion":"ver_ultimos"} · {"accion":"ver_por_fecha","fecha":"YYYY-MM-DD"} · {"accion":"resumen_mes"} · {"accion":"resumen_periodo","desde":"","hasta":""}
+
+CUENTAS CORRIENTES — los pagos a proveedor NO afectan el flujo de caja; viven en cc_movimientos, no en transacciones.
+{"accion":"nuevo_proveedor","proveedor":"","notas":""}
+{"accion":"pago_proveedor","proveedor":"","monto":0,"fecha":"YYYY-MM-DD","medio":"EFECTIVO/TRANSFERENCIA/CHEQUE","notas":""}
+{"accion":"ver_cuentas"} · {"accion":"ver_cc_detalle","proveedor":""}
+
+CHEQUES DE TERCEROS — un cheque es un instrumento de cobro que circula; en cartera no mueve el flujo.
+{"accion":"recibir_cheque","monto":0,"recibido_de":"","numero":"","fecha_cobro":"YYYY-MM-DD","es_electronico":true,"kg_carne":0,"concepto_cobro":"VENTA GANADO"}
+{"accion":"cobrar_cheque","cheque":"id o número","fecha":"YYYY-MM-DD"}
+{"accion":"endosar_cheque","cheque":"id o número","entregado_a":"","concepto_pago":""}
+{"accion":"rechazar_cheque","cheque":"id o número","motivo":""}
+{"accion":"ver_cartera"} · {"accion":"buscar_cheque","texto":""}
+// Endosar es cobrarlo y pagarlo en el mismo acto: registra las dos patas y la caja no se mueve.
+{"accion":"nuevo_cheque","fecha_emision":"","fecha_cobro":"","tipo":"EMITIDO","proveedor":"","monto":0,"banco":"","concepto":""}  // cheques PROPIOS que emitimos
+{"accion":"marcar_cheque_cobrado","id":0} · {"accion":"ver_cheques"}
+
+INVERSORES — el capital entra como ingreso de caja; el pago sale con los intereses y cierra al inversor.
+{"accion":"nuevo_inversor","inversor":"","capital":0,"tasa":0.08,"notas":""}
+{"accion":"pago_inversor","inversor":"","fecha":"YYYY-MM-DD"}   // devolucion_inversor hace lo mismo
+{"accion":"ver_inversores"}
+
+DIVIDENDOS — retiro de socios: mueve la caja pero NO es gasto del ejercicio.
+{"accion":"registrar_dividendo","socio":"","monto":0,"fecha":"YYYY-MM-DD","notas":""}
+{"accion":"ver_dividendos"}
+
+PRESUPUESTOS E INFORMES
+{"accion":"set_presupuesto","ciclo":"","concepto":"","monto_anual":0} · {"accion":"ver_presupuestos"}
+{"accion":"informe_ciclo","ciclo":""} · {"accion":"informe_mensual"}
+{"accion":"informe_pdf","ciclo":""} · {"accion":"informe_mensual_pdf","mes":"YYYY-MM"}   // devuelven un PDF
+
+INSUMOS Y STOCK
+{"accion":"compra_insumo","fecha":"","producto":"","rubro":"VETERINARIO/AGRICOLA/ALIMENTO","categoria":"","envases":0,"contenido_envase":0,"unidad":"ml/kg/unidad","precio_envase":0,"proveedor":""}
+// Genera el egreso Y la entrada de stock de una vez. Si faltan los envases, el contenido por envase o el precio, preguntá antes de mandarla: no inventes cantidades.
+
+LABOREOS
+{"accion":"nuevo_laboreo","lote":"","titulo":"","ciclo":"","hectareas":0} · {"accion":"agregar_item_laboreo","orden":0,"descripcion":"","cantidad":0,"precio_unitario":0}
+{"accion":"ejecutar_laboreo","orden":0} · {"accion":"ver_laboreos"} · {"accion":"ver_laboreo","orden":0}`;
+
 // ── 3. LEER EL FINANCIERO ────────────────────────────────────────────────────
 /**
  * consulta: "resumen" (el mes en curso), "transacciones" (con desde/hasta/concepto/texto),
@@ -233,4 +342,4 @@ async function pedirSincronizacion(db, campoKey, fin, todosLosCampos) {
   return r;
 }
 
-module.exports = { init, config, configurado, resumenRodeo, enviarVenta, registrarMovimiento, enviarTransaccion, consultar, estado, pedirSincronizacion, setFetch, llamar };
+module.exports = { init, config, configurado, resumenRodeo, enviarVenta, registrarMovimiento, enviarTransaccion, consultar, estado, pedirSincronizacion, setFetch, llamar, ejecutar, acciones, ACCIONES_FINANCIERO };
