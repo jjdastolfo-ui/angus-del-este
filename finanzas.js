@@ -289,9 +289,13 @@ CHEQUES DE TERCEROS — un cheque es un instrumento de cobro que circula; en car
 {"accion":"recibir_cheque","monto":0,"recibido_de":"","numero":"","fecha_cobro":"YYYY-MM-DD","es_electronico":true,"kg_carne":0,"concepto_cobro":"VENTA GANADO"}
 {"accion":"cobrar_cheque","cheque":"id o número","fecha":"YYYY-MM-DD"}
 {"accion":"endosar_cheque","cheque":"id o número","entregado_a":"","concepto_pago":""}
-{"accion":"rechazar_cheque","cheque":"id o número","motivo":""}
+{"accion":"rechazar_cheque","cheque":"id o número","motivo":""}   // rebotó de verdad, en el banco
+{"accion":"deshacer_cheque","cheque":"id o número"}   // ME EQUIVOQUÉ: vuelve a cartera y da de baja todo lo que generó
+{"accion":"editar_cheque","cheque":"id o número","monto":0,"numero":"","recibido_de":"","fecha_cobro":"","banco":"","kg_carne":0}   // sólo los campos que cambian; si ya se movió, deshacer primero
+{"accion":"borrar_cheque","cheque":"id o número","forzar":true}   // no existía; si ya se movió pide confirmar
 {"accion":"ver_cartera"} · {"accion":"buscar_cheque","texto":""}
 // Endosar es cobrarlo y pagarlo en el mismo acto: registra las dos patas y la caja no se mueve.
+// Si se cargó o se movió mal, deshacer_cheque lo vuelve a cartera. rechazar_cheque es sólo para un rebote real.
 {"accion":"nuevo_cheque","fecha_emision":"","fecha_cobro":"","tipo":"EMITIDO","proveedor":"","monto":0,"banco":"","concepto":""}  // cheques PROPIOS que emitimos
 {"accion":"marcar_cheque_cobrado","id":0} · {"accion":"ver_cheques"}
 
