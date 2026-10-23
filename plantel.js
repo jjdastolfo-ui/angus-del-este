@@ -17,6 +17,34 @@ const GESTACION = 283;
 const VENTANA_IATF = 10;   // días a cada lado de la FPP para atribuir a IATF
 const TRAMO_REPASO = 20;   // cada tramo del toro de repaso
 
+// CUÁNDO UNA PREÑEZ ESTÁ VENCIDA DE VERDAD
+//
+// Un servicio no es una fecha, es una ventana. Con IATF más repaso, la vaca
+// pudo quedar preñada el día de la inseminación o el último día que el toro
+// estuvo en el lote. La que se preñó del toro pare hasta dos meses después que
+// la de IATF, y las dos están bien.
+//
+// Medir el vencimiento desde que ENTRA el toro da por abortadas a todas las de
+// repaso. El límite real es el último día que pudo quedar preñada —que es
+// cuando el toro SALE— más una gestación larga.
+const GESTACION_LARGA = 290;        // el extremo alto del rango normal (275-290)
+const MARGEN_VENCIDA = 15;          // y recién ahí se la da por perdida
+// Si el servicio tiene toro pero nadie cargó cuándo salió, no se puede saber
+// hasta cuándo pudo parir. Se asume un repaso de esta duración y se avisa, en
+// vez de acusar de aborto a una vaca que capaz está por parir.
+const REPASO_SIN_SALIDA = 60;
+
+// La fecha de salida del toro es dato nuevo: hay bases que todavía no tienen la
+// columna. Preguntar antes evita que la consulta falle y deje todo en blanco.
+const _tieneSalida = new WeakMap();
+function haySalidaToro(db) {
+  if (_tieneSalida.has(db)) return _tieneSalida.get(db);
+  let hay = false;
+  try { hay = db.prepare("PRAGMA table_info(servicios)").all().some(c => c.name === "fecha_salida_toro"); } catch (e) {}
+  _tieneSalida.set(db, hay);
+  return hay;
+}
+
 const dias = (a, b) => (a && b) ? Math.round((new Date(b) - new Date(a)) / 86400000) : null;
 const sumar = (f, n) => { const d = new Date(f); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
 const meses = (a, b) => (a && b) ? Math.round(dias(a, b) / 30.44) : null;
@@ -34,6 +62,12 @@ function init(db) {
       created_at TEXT DEFAULT (datetime('now')));
     CREATE INDEX IF NOT EXISTS idx_notas_rp ON notas_campo(animal_rp);
   `);
+  // Cuándo salió el toro del lote. Sin esto no se puede saber hasta cuándo
+  // puede parir una vaca de repaso, y las de la cola del servicio aparecen
+  // como abortadas estando preñadas. Va como ALTER suelto porque una columna
+  // agregada al CREATE TABLE no aparece nunca en una tabla que ya existe.
+  try { db.exec(`ALTER TABLE servicios ADD COLUMN fecha_salida_toro TEXT`); } catch (e) {}
+  _tieneSalida.delete(db);
 }
 
 // ── EL CALENDARIO SE DEDUCE, NO SE CARGA ─────────────────────────────────────
@@ -46,7 +80,9 @@ function calendario(db) {
   const servicios = q(`
     SELECT temporada,
            MIN(COALESCE(fecha_iatf, fecha_ingreso_toro)) desde,
-           MAX(COALESCE(fecha_ingreso_toro, fecha_iatf)) hasta,
+           -- El servicio termina cuando SALE el toro, no cuando entra. La
+           -- columna no está en todas las bases, así que se pide sólo si existe.
+           MAX(COALESCE(${haySalidaToro(db) ? "fecha_salida_toro, " : ""}fecha_ingreso_toro, fecha_iatf)) hasta,
            COUNT(*) n
     FROM servicios WHERE temporada IS NOT NULL AND temporada <> ''
     GROUP BY temporada ORDER BY temporada DESC LIMIT 6`);
@@ -171,7 +207,8 @@ function plantel(db, opciones = {}) {
   // de esta vaca. Quien llama pasa una función rp → [crías]; sin eso, sólo las
   // de este campo (el módulo sigue sirviendo solo).
   const criasFuera = typeof opciones.criasFuera === "function" ? opciones.criasFuera : () => [];
-  const filas = quedan.map(v => armarVientre(db, v, { hoy, anioParicion, cortes: cal.cortes, criasFuera }));
+  const filas = quedan.map(v => armarVientre(db, v, { hoy, anioParicion, cortes: cal.cortes, criasFuera,
+    ventanaServicio: cal.servicios, salidaCargada: haySalidaToro(db) }));
   const resumen = resumir(filas, anioParicion);
   resumen.destinadas = destinadas;
   if (destinadas && !opciones.incluirDestinados) resumen.avisos.push({ n: destinadas, texto: "con destino de salida marcado: no se cuentan acá, están en Destinos" });
@@ -263,7 +300,32 @@ function armarVientre(db, v, ctx) {
   const fServ = servicio ? (servicio.fecha_iatf || servicio.fecha_ingreso_toro) : null;
   const fpp = fServ ? sumar(fServ, GESTACION) : null;
   const prenada = servicio && /PRE/i.test(String(servicio.resultado || ""));
-  const vencida = fpp ? dias(fpp, hoy) > 25 : false;
+
+  // El último día que esta vaca pudo quedar preñada en este servicio. Con toro
+  // de repaso es el día que el toro salió del lote; sin toro, la IATF.
+  let ultimaConcepcion = null, faltaSalida = false;
+  if (servicio) {
+    if (servicio.fecha_salida_toro) ultimaConcepcion = servicio.fecha_salida_toro;
+    else if (servicio.fecha_ingreso_toro) {
+      // Hay toro pero no se cargó cuándo salió: se asume un repaso típico.
+      ultimaConcepcion = sumar(servicio.fecha_ingreso_toro, REPASO_SIN_SALIDA);
+      faltaSalida = true;
+    } else if (/TORO|REPASO/i.test(String(servicio.resultado || ""))) {
+      // El tacto dice que se preñó DEL TORO, pero a esta vaca no le cargaron
+      // las fechas del toro. Si fue del toro, fue después de la IATF: tomar la
+      // IATF como última concepción la daría por abortada estando preñada. Se
+      // usa la ventana del servicio de su temporada, sacada del resto del rodeo.
+      const t = (ctx.ventanaServicio || []).find(s => String(s.temporada) === String(servicio.temporada));
+      ultimaConcepcion = t && t.hasta
+        ? (ctx.salidaCargada ? t.hasta : sumar(t.hasta, REPASO_SIN_SALIDA))
+        : (servicio.fecha_iatf || null);
+      faltaSalida = true;
+    } else ultimaConcepcion = servicio.fecha_iatf || null;
+  }
+  // Hasta acá puede parir sin que sea raro. Recién pasada esa fecha más el
+  // margen, una preñada sin cría es una preñez que se perdió.
+  const fppTardia = ultimaConcepcion ? sumar(ultimaConcepcion, GESTACION_LARGA) : fpp;
+  const vencida = fppTardia ? dias(fppTardia, hoy) > MARGEN_VENCIDA : false;
   const notaGrave = notas.find(n => n.grave && String(n.fecha || "").startsWith(anioParicion));
 
   let estado, causa = null, destete_ok = null;
@@ -344,7 +406,12 @@ function armarVientre(db, v, ctx) {
     // La temporada en curso
     servicio: fServ, padre_servicio: servicio ? (servicio.semen_iatf || servicio.toro_natural) : null,
     tacto: servicio ? servicio.resultado : null,
-    fpp, parto: criaAnio ? criaAnio.fecha_nac : null,
+    fpp,
+    // Hasta cuándo puede parir sin que sea raro, por el repaso con toro.
+    fpp_tardia: fppTardia && fppTardia !== fpp ? fppTardia : null,
+    salida_toro: servicio ? (servicio.fecha_salida_toro || null) : null,
+    falta_salida_toro: faltaSalida || null,
+    parto: criaAnio ? criaAnio.fecha_nac : null,
     ternero: criaAnio ? criaAnio.rp : null,
     peso_nac: criaAnio ? criaAnio.pn : null,
     destete: criaAnio ? criaAnio.destete : null,
